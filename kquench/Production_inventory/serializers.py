@@ -1,5 +1,13 @@
 from rest_framework import serializers
-from .models import Product, ProductionBatch, Inventory, InventoryTransaction
+
+from .models import (
+    Product,
+    ProductionBatch,
+    Inventory,
+    InventoryTransaction
+)
+
+from .services import record_production
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -17,10 +25,12 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionBatch
         fields = '__all__'
-        read_only_fields = ['created_by']
+        read_only_fields = [
+            'batch_id',
+            'created_by'
+        ]
 
     def create(self, validated_data):
-        from .services import record_production
         return record_production(validated_data)
 
 
@@ -33,7 +43,10 @@ class InventorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Inventory
         fields = '__all__'
-        read_only_fields = ['quantity_available', 'last_updated']
+        read_only_fields = [
+            'quantity_available',
+            'last_updated'
+        ]
 
 
 class InventoryTransactionSerializer(serializers.ModelSerializer):
