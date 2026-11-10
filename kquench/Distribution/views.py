@@ -47,6 +47,14 @@ class DistributionViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
+    role_permissions = {
+    'create': ['DISTRIBUTION_OFFICER'],
+    'update': ['DISTRIBUTION_OFFICER'],
+    'partial_update': ['DISTRIBUTION_OFFICER'],
+    'dispatch': ['DISTRIBUTION_OFFICER'],
+    'complete': ['DISTRIBUTION_OFFICER'],
+}
+
 
 class DistributionItemViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DistributionItem.objects.select_related(

@@ -48,12 +48,12 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
 
-
     'Users',
     'Production_inventory',
     'Sales',
     'Distribution',
     'Predictions',
+    'Dashboard',
 ]
 
 MIDDLEWARE = [
@@ -155,10 +155,11 @@ MAILERS = {
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+        'Users.permissions.RoleBasedPermission',
     ],
+
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
     ],
 }
