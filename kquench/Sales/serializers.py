@@ -1,8 +1,8 @@
+
 from django.db import transaction
 from rest_framework import serializers
 
 from .models import Sale, SaleItem
-from Production_inventory.models import Product
 
 
 class SaleItemSerializer(serializers.ModelSerializer):
@@ -27,6 +27,13 @@ class SaleItemSerializer(serializers.ModelSerializer):
             'subtotal'
         ]
 
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Quantity must be greater than zero.'
+            )
+        return value
+
 
 class SaleSerializer(serializers.ModelSerializer):
     items = SaleItemSerializer(many=True)
@@ -46,7 +53,9 @@ class SaleSerializer(serializers.ModelSerializer):
                 'A sale must contain at least one product.'
             )
 
-        product_ids = [item['product'].id for item in items]
+        product_ids = [
+            item['product'].product_id for item in items
+        ]
 
         if len(product_ids) != len(set(product_ids)):
             raise serializers.ValidationError(
@@ -65,9 +74,7 @@ class SaleSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items')
 
-        sale = Sale.objects.create(
-            **validated_data
-        )
+        sale = Sale.objects.create(**validated_data)
 
         total = 0
 
