@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'Distribution',
     'Predictions',
     'Dashboard',
+    "django_extensions",
 ]
 
 MIDDLEWARE = [
