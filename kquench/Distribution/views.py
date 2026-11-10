@@ -1,6 +1,16 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
 from .models import Distribution, DistributionItem
-from .serializers import DistributionSerializer, DistributionItemSerializer
+from .serializers import (
+    DistributionSerializer,
+    DistributionItemSerializer
+)
+from .services import (
+    dispatch_distribution,
+    complete_distribution
+)
 
 
 class DistributionViewSet(viewsets.ModelViewSet):
@@ -10,9 +20,38 @@ class DistributionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    @action(detail=True, methods=['post'])
+    def dispatch(self, request, pk=None):
+        distribution = self.get_object()
 
-class DistributionItemViewSet(viewsets.ModelViewSet):
+        distribution = dispatch_distribution(
+            distribution.distribution_id,
+            request.user
+        )
+
+        return Response(
+            self.get_serializer(distribution).data,
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        distribution = self.get_object()
+
+        distribution = complete_distribution(
+            distribution.distribution_id
+        )
+
+        return Response(
+            self.get_serializer(distribution).data,
+            status=status.HTTP_200_OK
+        )
+
+
+class DistributionItemViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DistributionItem.objects.select_related(
-        'distribution', 'sale_item', 'sale_item__product'
+        'distribution',
+        'sale_item',
+        'sale_item__product'
     )
     serializer_class = DistributionItemSerializer

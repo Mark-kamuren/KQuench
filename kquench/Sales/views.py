@@ -11,6 +11,6 @@ class SaleViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
 
-class SaleItemViewSet(viewsets.ModelViewSet):
+class SaleItemViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SaleItem.objects.select_related('sale', 'product')
     serializer_class = SaleItemSerializer
