@@ -1,31 +1,67 @@
-
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.mixins import (
+    CreateModelMixin,
+    ListModelMixin,
+    RetrieveModelMixin
+)
 from rest_framework.response import Response
 
-from .models import Distribution, DistributionItem
+from .models import (
+    Distribution,
+    DistributionItem,
+    DistributionDestination
+)
+
 from .serializers import (
     DistributionSerializer,
-    DistributionItemSerializer
+    DistributionItemSerializer,
+    DistributionDestinationSerializer
 )
-from .services import dispatch_distribution, complete_distribution
+
+from .services import (
+    dispatch_distribution,
+    complete_distribution
+)
 
 
-class DistributionViewSet(viewsets.ModelViewSet):
-    queryset = Distribution.objects.prefetch_related('items')
-    serializer_class = DistributionSerializer
-
-    # Use the database primary key for lookups.
-    # Keep DRF's default URL keyword argument: pk.
-    lookup_field = 'distribution_id'
-    lookup_url_kwarg = 'pk'
+class DistributionDestinationViewSet(viewsets.ModelViewSet):
+    queryset = DistributionDestination.objects.all()
+    serializer_class = DistributionDestinationSerializer
 
     role_permissions = {
         'create': ['DISTRIBUTION_OFFICER'],
         'update': ['DISTRIBUTION_OFFICER'],
         'partial_update': ['DISTRIBUTION_OFFICER'],
-        'dispatch': ['DISTRIBUTION_OFFICER'],
-        'complete': ['DISTRIBUTION_OFFICER'],
+        'destroy': ['DISTRIBUTION_OFFICER'],
+    }
+
+
+class DistributionViewSet(
+    CreateModelMixin,
+    ListModelMixin,
+    RetrieveModelMixin,
+    viewsets.GenericViewSet
+):
+    queryset = Distribution.objects.select_related(
+        'sale',
+        'destination',
+        'created_by'
+    ).prefetch_related(
+        'items',
+        'items__product',
+        'items__sale_item'
+    )
+
+    serializer_class = DistributionSerializer
+
+    lookup_field = 'distribution_id'
+    lookup_url_kwarg = 'pk'
+
+    role_permissions = {
+        'create': ['DISTRIBUTION_OFFICER'],
+        'dispatch_action': ['DISTRIBUTION_OFFICER'],
+        'complete_action': ['DISTRIBUTION_OFFICER'],
     }
 
     def perform_create(self, serializer):
@@ -62,6 +98,7 @@ class DistributionViewSet(viewsets.ModelViewSet):
 class DistributionItemViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DistributionItem.objects.select_related(
         'distribution',
+        'product',
         'sale_item',
         'sale_item__product'
     )

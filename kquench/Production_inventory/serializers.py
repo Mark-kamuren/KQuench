@@ -3,11 +3,12 @@ from rest_framework import serializers
 from .models import (
     Product,
     ProductionBatch,
+    SupplierReceipt,
     Inventory,
     InventoryTransaction
 )
 
-from .services import record_production
+from .services import record_supplier_receipt
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -16,6 +17,26 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class SupplierReceiptSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(
+        source='product.product_name',
+        read_only=True
+    )
+
+    class Meta:
+        model = SupplierReceipt
+        fields = '__all__'
+        read_only_fields = [
+            'receipt_id',
+            'received_by',
+            'created_at'
+        ]
+
+    def create(self, validated_data):
+        return record_supplier_receipt(validated_data)
+
+
+# Historical records only. New records use SupplierReceipt.
 class ProductionBatchSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(
         source='product.product_name',
@@ -25,13 +46,7 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionBatch
         fields = '__all__'
-        read_only_fields = [
-            'batch_id',
-            'created_by'
-        ]
-
-    def create(self, validated_data):
-        return record_production(validated_data)
+        read_only_fields = fields
 
 
 class InventorySerializer(serializers.ModelSerializer):
@@ -58,14 +73,4 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryTransaction
         fields = '__all__'
-        read_only_fields = [
-            'transaction_id',
-            'product',
-            'transaction_type',
-            'quantity',
-            'transaction_date',
-            'production_batch',
-            'distribution_item',
-            'notes',
-            'created_by'
-        ]
+        read_only_fields = fields
