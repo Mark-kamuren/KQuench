@@ -46,7 +46,15 @@ class ProductionBatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionBatch
         fields = '__all__'
-        read_only_fields = fields
+        read_only_fields = [
+            'batch_id',
+            'product',
+            'batch_number',
+            'production_date',
+            'quantity_produced',
+            'notes',
+            'created_by'
+            ]
 
 
 class InventorySerializer(serializers.ModelSerializer):
@@ -62,8 +70,6 @@ class InventorySerializer(serializers.ModelSerializer):
             'quantity_available',
             'last_updated'
         ]
-
-
 class InventoryTransactionSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(
         source='product.product_name',
@@ -73,4 +79,15 @@ class InventoryTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryTransaction
         fields = '__all__'
-        read_only_fields = fields
+        read_only_fields = [
+            'transaction_id',
+            'product',
+            'transaction_type',
+            'quantity',
+            'transaction_date',
+            'production_batch',
+            'supplier_receipt',
+            'distribution_item',
+            'notes',
+            'created_by'
+            ]

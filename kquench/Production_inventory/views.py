@@ -32,11 +32,23 @@ class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
 
     role_permissions = {
-        'create': ['INVENTORY_MANAGER'],
-        'update': ['INVENTORY_MANAGER'],
-        'partial_update': ['INVENTORY_MANAGER'],
-        'destroy': ['INVENTORY_MANAGER'],
-    }
+    'list': [
+        'PRODUCTION_MANAGER',
+        'INVENTORY_MANAGER',
+        'SALES_OFFICER',
+        'DISTRIBUTION_OFFICER',
+    ],
+    'retrieve': [
+        'PRODUCTION_MANAGER',
+        'INVENTORY_MANAGER',
+        'SALES_OFFICER',
+        'DISTRIBUTION_OFFICER',
+    ],
+    'create': ['INVENTORY_MANAGER'],
+    'update': ['INVENTORY_MANAGER'],
+    'partial_update': ['INVENTORY_MANAGER'],
+    'destroy': ['INVENTORY_MANAGER'],
+}
 
 
 class SupplierReceiptViewSet(

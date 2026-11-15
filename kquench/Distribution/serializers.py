@@ -1,6 +1,6 @@
 from django.db import transaction
 from rest_framework import serializers
-from Sales.models import Sale, SaleItem
+from Sales.models import SaleItem
 from .models import (
     Distribution,
     DistributionItem,
@@ -60,14 +60,27 @@ class DistributionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Distribution
-        fields = '__all__'
+        fields = [
+            'distribution_id',
+            'distribution_type',
+            'destination',
+            'destination_name',
+            'sale',
+            'distribution_date',
+            'dispatch_date',
+            'vehicle_number',
+            'driver_name',
+            'status',
+            'notes',
+            'created_by',
+            'items',
+        ]
         read_only_fields = [
             'distribution_id',
             'dispatch_date',
             'status',
-            'created_by'
+            'created_by',
         ]
-
     def validate(self, attrs):
         distribution_type = attrs.get(
             'distribution_type',

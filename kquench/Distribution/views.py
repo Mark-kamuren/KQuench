@@ -59,11 +59,12 @@ class DistributionViewSet(
     lookup_url_kwarg = 'pk'
 
     role_permissions = {
-        'create': ['DISTRIBUTION_OFFICER'],
-        'dispatch_action': ['DISTRIBUTION_OFFICER'],
-        'complete_action': ['DISTRIBUTION_OFFICER'],
-    }
-
+    'list': ['DISTRIBUTION_OFFICER'],
+    'retrieve': ['DISTRIBUTION_OFFICER'],
+    'create': ['DISTRIBUTION_OFFICER'],
+    'dispatch_action': ['DISTRIBUTION_OFFICER'],
+    'complete_action': ['DISTRIBUTION_OFFICER'],
+}
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
