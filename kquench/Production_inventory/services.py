@@ -2,58 +2,56 @@ from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
 from .models import (
-    ProductionBatch,
+    SupplierReceipt,
     Inventory,
     InventoryTransaction
 )
 
 
 @transaction.atomic
-def record_production(validated_data):
+def record_supplier_receipt(validated_data):
     """
-    Record a production batch, increase available stock
-    and create an inventory transaction.
+    Record water received from an external supplier
+    and increase available inventory.
     """
 
-    quantity = validated_data.get('quantity_produced')
+    quantity = validated_data.get('quantity_received')
 
-    if quantity is None or quantity <= 0:
+    if not quantity or quantity <= 0:
         raise ValidationError(
-            'Production quantity must be greater than zero.'
+            'Received quantity must be greater than zero.'
         )
 
-    # Create production batch
-    batch = ProductionBatch.objects.create(**validated_data)
+    receipt = SupplierReceipt.objects.create(**validated_data)
 
-    # Get or create inventory record
     inventory, created = Inventory.objects.get_or_create(
-        product=batch.product,
+        product=receipt.product,
         defaults={
             'quantity_available': 0,
             'reorder_level': 0
         }
     )
 
-    # Lock inventory before updating
     inventory = Inventory.objects.select_for_update().get(
         pk=inventory.pk
     )
 
-    # Increase stock
-    inventory.quantity_available += batch.quantity_produced
+    inventory.quantity_available += receipt.quantity_received
     inventory.save()
 
-    # Record inventory transaction
     InventoryTransaction.objects.create(
-        product=batch.product,
-        transaction_type='PRODUCTION',
-        quantity=batch.quantity_produced,
-        production_batch=batch,
-        created_by=batch.created_by,
-        notes=f'Production batch {batch.batch_number}'
+        product=receipt.product,
+        transaction_type='SUPPLIER_RECEIPT',
+        quantity=receipt.quantity_received,
+        supplier_receipt=receipt,
+        created_by=receipt.received_by,
+        notes=(
+            f'Supplier: {receipt.supplier_name}. '
+            f'Reference: {receipt.delivery_reference}'
+        )
     )
 
-    return batch
+    return receipt
 
 
 @transaction.atomic
@@ -64,10 +62,6 @@ def adjust_inventory(
     user,
     notes=''
 ):
-    """
-    Increase or decrease inventory and record the adjustment.
-    """
-
     if quantity <= 0:
         raise ValidationError(
             'Adjustment quantity must be greater than zero.'
@@ -79,7 +73,6 @@ def adjust_inventory(
     ]:
         raise ValidationError('Invalid adjustment type.')
 
-    # Lock the inventory record
     inventory = Inventory.objects.select_for_update().filter(
         product_id=product_id
     ).first()
@@ -89,10 +82,8 @@ def adjust_inventory(
             'No inventory record exists for this product.'
         )
 
-    # Apply adjustment
     if adjustment_type == 'ADJUSTMENT_IN':
         inventory.quantity_available += quantity
-
     else:
         if inventory.quantity_available < quantity:
             raise ValidationError(
@@ -103,7 +94,6 @@ def adjust_inventory(
 
     inventory.save()
 
-    # Record the adjustment
     InventoryTransaction.objects.create(
         product_id=product_id,
         transaction_type=adjustment_type,

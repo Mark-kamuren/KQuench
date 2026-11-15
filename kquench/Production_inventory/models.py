@@ -3,7 +3,6 @@ from django.db import models
 from django.db.models import Q
 from django.core.validators import MinValueValidator
 
-
 class Product(models.Model):
     product_id = models.BigAutoField(primary_key=True)
     product_name = models.CharField(max_length=100)
@@ -25,6 +24,7 @@ class Product(models.Model):
         return self.product_name
 
 
+# Retained for historical production records.
 class ProductionBatch(models.Model):
     batch_id = models.BigAutoField(primary_key=True)
     product = models.ForeignKey(
@@ -51,6 +51,36 @@ class ProductionBatch(models.Model):
 
     def __str__(self):
         return self.batch_number
+
+
+class SupplierReceipt(models.Model):
+    receipt_id = models.BigAutoField(primary_key=True)
+    supplier_name = models.CharField(max_length=150)
+    delivery_reference = models.CharField(max_length=100)
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name='supplier_receipts'
+    )
+    received_date = models.DateField()
+    quantity_received = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+    notes = models.TextField(blank=True, null=True)
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='supplier_receipts_created'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'supplier_receipts'
+        ordering = ['-received_date']
+
+    def __str__(self):
+        return f'{self.supplier_name} - {self.delivery_reference}'
 
 
 class Inventory(models.Model):
@@ -84,10 +114,15 @@ class Inventory(models.Model):
 class InventoryTransaction(models.Model):
 
     class TransactionTypes(models.TextChoices):
-        PRODUCTION = 'PRODUCTION', 'Production'
-        DELIVERY = 'DELIVERY', 'Delivery'
+        SUPPLIER_RECEIPT = 'SUPPLIER_RECEIPT', 'Supplier Receipt'
+        INTERNAL_DISTRIBUTION = 'INTERNAL_DISTRIBUTION', 'Internal Distribution'
+        EXTERNAL_SALE = 'EXTERNAL_SALE', 'External Sale'
         ADJUSTMENT_IN = 'ADJUSTMENT_IN', 'Stock Adjustment In'
         ADJUSTMENT_OUT = 'ADJUSTMENT_OUT', 'Stock Adjustment Out'
+
+        # Retain historical transaction values.
+        PRODUCTION = 'PRODUCTION', 'Legacy Production'
+        DELIVERY = 'DELIVERY', 'Legacy Delivery'
 
     transaction_id = models.BigAutoField(primary_key=True)
     product = models.ForeignKey(
@@ -96,13 +131,15 @@ class InventoryTransaction(models.Model):
         related_name='inventory_transactions'
     )
     transaction_type = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=TransactionTypes.choices
     )
     quantity = models.PositiveIntegerField(
         validators=[MinValueValidator(1)]
     )
     transaction_date = models.DateTimeField(auto_now_add=True)
+
+    # Historical relationship.
     production_batch = models.ForeignKey(
         ProductionBatch,
         on_delete=models.PROTECT,
@@ -110,6 +147,16 @@ class InventoryTransaction(models.Model):
         blank=True,
         related_name='inventory_transactions'
     )
+
+    supplier_receipt = models.ForeignKey(
+        SupplierReceipt,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='inventory_transactions'
+    )
+
+    # Retained for the existing distribution implementation.
     distribution_item = models.OneToOneField(
         'Distribution.DistributionItem',
         on_delete=models.PROTECT,
@@ -117,6 +164,7 @@ class InventoryTransaction(models.Model):
         blank=True,
         related_name='stock_transaction'
     )
+
     notes = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

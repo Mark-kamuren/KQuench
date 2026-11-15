@@ -11,6 +11,7 @@ from rest_framework.exceptions import ValidationError
 from .models import (
     Product,
     ProductionBatch,
+    SupplierReceipt,
     Inventory,
     InventoryTransaction
 )
@@ -18,11 +19,12 @@ from .models import (
 from .serializers import (
     ProductSerializer,
     ProductionBatchSerializer,
+    SupplierReceiptSerializer,
     InventorySerializer,
     InventoryTransactionSerializer
 )
 
-from .services import record_production, adjust_inventory
+from .services import adjust_inventory
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -37,24 +39,32 @@ class ProductViewSet(viewsets.ModelViewSet):
     }
 
 
-class ProductionBatchViewSet(
+class SupplierReceiptViewSet(
     CreateModelMixin,
     ListModelMixin,
     RetrieveModelMixin,
     viewsets.GenericViewSet
 ):
-    queryset = ProductionBatch.objects.select_related(
+    queryset = SupplierReceipt.objects.select_related(
         'product',
-        'created_by'
+        'received_by'
     )
-    serializer_class = ProductionBatchSerializer
+    serializer_class = SupplierReceiptSerializer
 
     role_permissions = {
         'create': ['PRODUCTION_MANAGER'],
     }
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        serializer.save(received_by=self.request.user)
+
+
+class ProductionBatchViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = ProductionBatch.objects.select_related(
+        'product',
+        'created_by'
+    )
+    serializer_class = ProductionBatchSerializer
 
 
 class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -67,7 +77,6 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['post'])
     def adjust(self, request, pk=None):
-
         inventory = self.get_object()
 
         adjustment_type = request.data.get('adjustment_type')
@@ -78,9 +87,7 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
             'ADJUSTMENT_IN',
             'ADJUSTMENT_OUT'
         ]:
-            raise ValidationError(
-                'Adjustment type must be ADJUSTMENT_IN or ADJUSTMENT_OUT.'
-            )
+            raise ValidationError('Invalid adjustment type.')
 
         quantity = serializers.IntegerField(
             min_value=1
@@ -108,6 +115,7 @@ class InventoryTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         'product',
         'created_by',
         'production_batch',
+        'supplier_receipt',
         'distribution_item'
     )
     serializer_class = InventoryTransactionSerializer
