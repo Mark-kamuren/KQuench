@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission
 
 
 class RoleBasedPermission(BasePermission):
@@ -9,22 +9,18 @@ class RoleBasedPermission(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        # Restrict user management to administrators
-        if getattr(view, 'admin_only', False):
-            return user.is_superuser or user.role == 'ADMIN'
-
-        # All authenticated staff can view permitted records
-        if request.method in SAFE_METHODS:
+        # Superusers and administrators have full access.
+        if user.is_superuser or user.role == 'ADMIN':
             return True
 
-        # Check the role allowed to perform this action
-        role_permissions = getattr(view, 'role_permissions', {})
-        allowed_roles = role_permissions.get(
-            view.action,
-            ['ADMIN']
-        )
+        # Allow authenticated API metadata requests.
+        if request.method == 'OPTIONS':
+            return True
 
-        return (
-            user.is_superuser
-            or user.role in allowed_roles
-        )
+        # Each ViewSet must explicitly define allowed roles.
+        role_permissions = getattr(view, 'role_permissions', {})
+        action = getattr(view, 'action', None)
+
+        allowed_roles = role_permissions.get(action, [])
+
+        return user.role in allowed_roles
