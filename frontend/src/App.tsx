@@ -1,4 +1,4 @@
-
+import Products from "./pages/Products";
 import { useEffect, useState } from "react";
 import {
   BrowserRouter,
@@ -393,7 +393,7 @@ function MainLayout() {
 
             <Route
               path="/products"
-              element={<Placeholder title="Products" />}
+              element={<Products />}
             />
 
             <Route
