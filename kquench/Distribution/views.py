@@ -34,6 +34,7 @@ class DistributionDestinationViewSet(viewsets.ModelViewSet):
         'update': ['DISTRIBUTION_OFFICER'],
         'partial_update': ['DISTRIBUTION_OFFICER'],
         'destroy': ['DISTRIBUTION_OFFICER'],
+    
     }
 
 
