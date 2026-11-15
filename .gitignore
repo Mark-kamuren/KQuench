@@ -11,6 +11,7 @@ media/
 # Environment variables
 .env
 .env.*
+kquench_backup.sql
 
 # React
 frontend/node_modules/
