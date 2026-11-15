@@ -1,9 +1,6 @@
-
 from django.db import transaction
 from rest_framework import serializers
-
 from .models import Sale, SaleItem
-
 
 class SaleItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(
@@ -34,9 +31,8 @@ class SaleItemSerializer(serializers.ModelSerializer):
             )
         return value
 
-
 class SaleSerializer(serializers.ModelSerializer):
-    items = SaleItemSerializer(many=True)
+    items = SaleItemSerializer(many=True, required=False)
 
     class Meta:
         model = Sale
@@ -44,8 +40,19 @@ class SaleSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'sale_date',
             'total_amount',
-            'created_by'
+            'sale_status',
+            'created_by',
         ]
+
+    def get_fields(self):
+        fields = super().get_fields()
+
+        # Sale items can be supplied during creation, but cannot
+        # be edited after the sale has been created.
+        if self.instance is not None:
+            fields['items'].read_only = True
+
+        return fields
 
     def validate_items(self, items):
         if not items:
@@ -70,9 +77,36 @@ class SaleSerializer(serializers.ModelSerializer):
 
         return items
 
+    def validate_payment_status(self, value):
+        if value == Sale.PaymentStatuses.CANCELLED:
+            raise serializers.ValidationError(
+                'Use the sale cancellation operation instead.'
+            )
+
+        if self.instance:
+            if self.instance.payment_status == 'CANCELLED':
+                raise serializers.ValidationError(
+                    'A cancelled sale cannot be modified.'
+                )
+
+            if (
+                self.instance.payment_status == 'PAID'
+                and value != 'PAID'
+            ):
+                raise serializers.ValidationError(
+                    'A paid sale cannot be reverted to pending.'
+                )
+
+        return value
+
     @transaction.atomic
     def create(self, validated_data):
-        items_data = validated_data.pop('items')
+        items_data = validated_data.pop('items', None)
+
+        if not items_data:
+            raise serializers.ValidationError({
+                'items': 'A sale must contain at least one product.'
+            })
 
         sale = Sale.objects.create(**validated_data)
 

@@ -1,6 +1,4 @@
 from rest_framework.permissions import BasePermission
-
-
 class RoleBasedPermission(BasePermission):
 
     def has_permission(self, request, view):
@@ -9,18 +7,17 @@ class RoleBasedPermission(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        # Superusers and administrators have full access.
-        if user.is_superuser or user.role == 'ADMIN':
+        if user.is_superuser:
             return True
 
-        # Allow authenticated API metadata requests.
-        if request.method == 'OPTIONS':
-            return True
+        if getattr(view, 'admin_only', False):
+            return user.role == 'ADMIN'
 
-        # Each ViewSet must explicitly define allowed roles.
         role_permissions = getattr(view, 'role_permissions', {})
-        action = getattr(view, 'action', None)
 
-        allowed_roles = role_permissions.get(action, [])
+        allowed_roles = role_permissions.get(
+            view.action,
+            ['ADMIN']
+        )
 
         return user.role in allowed_roles
