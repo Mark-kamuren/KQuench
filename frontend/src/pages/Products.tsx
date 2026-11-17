@@ -1,32 +1,27 @@
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Plus,
-  Search,
-  Pencil,
-  Power,
-  RefreshCw,
-  Package,
-  X,
-} from "lucide-react";
 import api from "../services/api";
 
-type Product = {
+interface Product {
   product_id: number;
   product_name: string;
   description: string | null;
   unit_size_ml: number;
-  unit_price: string | number;
+  unit_price: number | string;
   is_active: boolean;
-  created_at: string;
-};
+  created_at?: string;
+}
 
-type ProductForm = {
+interface ProductsProps {
+  role: string;
+}
+
+interface ProductForm {
   product_name: string;
   description: string;
   unit_size_ml: string;
   unit_price: string;
-};
+}
 
 const emptyForm: ProductForm = {
   product_name: "",
@@ -38,25 +33,25 @@ const emptyForm: ProductForm = {
 function getErrorMessage(error: any): string {
   const data = error?.response?.data;
 
+  if (!data) return "Something went wrong. Please try again.";
   if (typeof data === "string") return data;
-  if (data?.detail) return data.detail;
+  if (data.detail) return data.detail;
 
-  if (data && typeof data === "object") {
-    return Object.entries(data)
-      .map(([field, messages]) => {
-        const value = Array.isArray(messages)
-          ? messages.join(", ")
-          : String(messages);
+  return Object.entries(data)
+    .map(([field, messages]) => {
+      const message = Array.isArray(messages)
+        ? messages.join(", ")
+        : String(messages);
 
-        return `${field}: ${value}`;
-      })
-      .join(" | ");
-  }
-
-  return "Something went wrong. Please try again.";
+      return `${field}: ${message}`;
+    })
+    .join(" | ");
 }
 
-export default function Products() {
+export default function Products({ role }: ProductsProps) {
+  const canManageProducts =
+    role === "ADMIN" || role === "INVENTORY_MANAGER";
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,31 +59,27 @@ export default function Products() {
   const [success, setSuccess] = useState("");
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form, setForm] = useState<ProductForm>(emptyForm);
 
-  async function loadProducts() {
-    setLoading(true);
-    setError("");
-
+  const loadProducts = async () => {
     try {
+      setLoading(true);
+      setError("");
+
       const response = await api.get("products/");
+      const data = response.data;
 
-      // Supports both ordinary DRF lists and paginated DRF responses.
-      const results = Array.isArray(response.data)
-        ? response.data
-        : response.data.results;
-
-      setProducts(results ?? []);
+      setProducts(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     loadProducts();
@@ -101,61 +92,78 @@ export default function Products() {
         String(product.product_id).includes(search);
 
       const matchesStatus =
-        filter === "ALL" ||
-        (filter === "ACTIVE" && product.is_active) ||
-        (filter === "INACTIVE" && !product.is_active);
+        statusFilter === "ALL" ||
+        (statusFilter === "ACTIVE" && product.is_active) ||
+        (statusFilter === "INACTIVE" && !product.is_active);
 
       return matchesSearch && matchesStatus;
     });
-  }, [products, search, filter]);
+  }, [products, search, statusFilter]);
 
-  function openCreateForm() {
+  const activeCount = products.filter((p) => p.is_active).length;
+  const inactiveCount = products.length - activeCount;
+
+  const openCreateForm = () => {
     setEditingProduct(null);
     setForm(emptyForm);
     setError("");
     setSuccess("");
     setShowForm(true);
-  }
+  };
 
-  function openEditForm(product: Product) {
+  const openEditForm = (product: Product) => {
     setEditingProduct(product);
     setForm({
       product_name: product.product_name,
-      description: product.description ?? "",
+      description: product.description || "",
       unit_size_ml: String(product.unit_size_ml),
       unit_price: String(product.unit_price),
     });
     setError("");
     setSuccess("");
     setShowForm(true);
-  }
+  };
 
-  function closeForm() {
+  const closeForm = () => {
     setShowForm(false);
     setEditingProduct(null);
     setForm(emptyForm);
-  }
+  };
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    setSuccess("");
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!canManageProducts) return;
 
     const payload = {
       product_name: form.product_name.trim(),
-      description: form.description.trim() || null,
+      description: form.description.trim(),
       unit_size_ml: Number(form.unit_size_ml),
       unit_price: Number(form.unit_price),
     };
 
+    if (
+      !payload.product_name ||
+      payload.unit_size_ml <= 0 ||
+      payload.unit_price < 0 ||
+      !Number.isFinite(payload.unit_size_ml) ||
+      !Number.isFinite(payload.unit_price)
+    ) {
+      setError("Enter a valid product name, size and price.");
+      return;
+    }
+
     try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
       if (editingProduct) {
         await api.patch(`products/${editingProduct.product_id}/`, payload);
         setSuccess("Product updated successfully.");
       } else {
         await api.post("products/", payload);
-        setSuccess("Product created successfully.");
+        setSuccess("Product added successfully.");
       }
 
       closeForm();
@@ -165,56 +173,48 @@ export default function Products() {
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  async function toggleProductStatus(product: Product) {
+  const toggleProductStatus = async (product: Product) => {
+    if (!canManageProducts) return;
+
     const action = product.is_active ? "deactivate" : "activate";
 
-    if (
-      !window.confirm(
-        `Are you sure you want to ${action} ${product.product_name}?`
-      )
-    ) {
+    if (!window.confirm(`Are you sure you want to ${action} this product?`)) {
       return;
     }
 
-    setError("");
-    setSuccess("");
-
     try {
+      setError("");
+      setSuccess("");
+
       await api.patch(`products/${product.product_id}/`, {
         is_active: !product.is_active,
       });
 
-      setSuccess(
-        `${product.product_name} has been ${action}d successfully.`
-      );
-
+      setSuccess(`Product ${action}d successfully.`);
       await loadProducts();
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }
-
-  const activeCount = products.filter((p) => p.is_active).length;
-  const inactiveCount = products.length - activeCount;
+  };
 
   return (
-    <>
-      <div className="page-heading d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div className="container-fluid py-3">
+      <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-          <h2>Products</h2>
-          <p>Manage bottled water products and their details.</p>
+          <h3 className="fw-bold mb-1">Products</h3>
+          <p className="text-muted mb-0">
+            Manage bottled water products and their details.
+          </p>
         </div>
 
-        <button
-          type="button"
-          className="btn btn-primary d-flex align-items-center gap-2"
-          onClick={openCreateForm}
-        >
-          <Plus size={18} />
-          Add Product
-        </button>
+        {canManageProducts && (
+          <button className="btn btn-primary" onClick={openCreateForm}>
+            <i className="bi bi-plus-lg me-2"></i>
+            Add Product
+          </button>
+        )}
       </div>
 
       {error && (
@@ -224,8 +224,7 @@ export default function Products() {
             type="button"
             className="btn-close"
             onClick={() => setError("")}
-            aria-label="Close"
-          />
+          ></button>
         </div>
       )}
 
@@ -236,303 +235,274 @@ export default function Products() {
             type="button"
             className="btn-close"
             onClick={() => setSuccess("")}
-            aria-label="Close"
-          />
+          ></button>
         </div>
       )}
 
       <div className="row g-3 mb-4">
-        <div className="col-12 col-md-4">
-          <div className="stat-card">
-            <div className="stat-icon blue">
-              <Package size={22} />
+        <div className="col-md-4">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body">
+              <p className="text-muted mb-1">Total Products</p>
+              <h3 className="fw-bold mb-0">{products.length}</h3>
             </div>
-            <p>Total Products</p>
-            <h3>{products.length}</h3>
           </div>
         </div>
 
-        <div className="col-12 col-md-4">
-          <div className="stat-card">
-            <div className="stat-icon green">
-              <Package size={22} />
+        <div className="col-md-4">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body">
+              <p className="text-muted mb-1">Active Products</p>
+              <h3 className="fw-bold text-success mb-0">{activeCount}</h3>
             </div>
-            <p>Active Products</p>
-            <h3>{activeCount}</h3>
           </div>
         </div>
 
-        <div className="col-12 col-md-4">
-          <div className="stat-card">
-            <div className="stat-icon orange">
-              <Package size={22} />
+        <div className="col-md-4">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body">
+              <p className="text-muted mb-1">Inactive Products</p>
+              <h3 className="fw-bold text-secondary mb-0">
+                {inactiveCount}
+              </h3>
             </div>
-            <p>Inactive Products</p>
-            <h3>{inactiveCount}</h3>
           </div>
         </div>
       </div>
 
-      {showForm && (
-        <div className="content-card mb-4">
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <h5 className="mb-0">
+      {showForm && canManageProducts && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 className="mb-0 fw-semibold">
               {editingProduct ? "Edit Product" : "Add New Product"}
             </h5>
-
             <button
+              className="btn-close"
               type="button"
-              className="btn btn-light btn-sm"
               onClick={closeForm}
-              aria-label="Close form"
-            >
-              <X size={18} />
-            </button>
+            ></button>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="row g-3">
-              <div className="col-12 col-md-6">
-                <label className="form-label">Product Name</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={form.product_name}
-                  onChange={(e) =>
-                    setForm({ ...form, product_name: e.target.value })
-                  }
-                  placeholder="e.g. Bottled Water 500ml"
-                  maxLength={100}
-                  required
-                />
+          <div className="card-body">
+            <form onSubmit={handleSubmit}>
+              <div className="row g-3">
+                <div className="col-md-6">
+                  <label className="form-label">Product Name</label>
+                  <input
+                    className="form-control"
+                    value={form.product_name}
+                    onChange={(e) =>
+                      setForm({ ...form, product_name: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="col-md-3">
+                  <label className="form-label">Bottle Size (ml)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-control"
+                    value={form.unit_size_ml}
+                    onChange={(e) =>
+                      setForm({ ...form, unit_size_ml: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="col-md-3">
+                  <label className="form-label">Unit Price (KES)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-control"
+                    value={form.unit_price}
+                    onChange={(e) =>
+                      setForm({ ...form, unit_price: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="col-12">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({ ...form, description: e.target.value })
+                    }
+                  />
+                </div>
               </div>
 
-              <div className="col-12 col-md-6">
-                <label className="form-label">Bottle Size (ml)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={form.unit_size_ml}
-                  onChange={(e) =>
-                    setForm({ ...form, unit_size_ml: e.target.value })
-                  }
-                  min="1"
-                  step="1"
-                  placeholder="e.g. 500"
-                  required
-                />
+              <div className="d-flex gap-2 mt-4">
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Product"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={closeForm}
+                >
+                  Cancel
+                </button>
               </div>
-
-              <div className="col-12 col-md-6">
-                <label className="form-label">Unit Price (KES)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={form.unit_price}
-                  onChange={(e) =>
-                    setForm({ ...form, unit_price: e.target.value })
-                  }
-                  min="0"
-                  step="0.01"
-                  placeholder="e.g. 50.00"
-                  required
-                />
-              </div>
-
-              <div className="col-12 col-md-6">
-                <label className="form-label">Description</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  maxLength={255}
-                  placeholder="Optional product description"
-                />
-              </div>
-            </div>
-
-            <div className="d-flex justify-content-end gap-2 mt-4">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={closeForm}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={saving}
-              >
-                {saving
-                  ? "Saving..."
-                  : editingProduct
-                    ? "Update Product"
-                    : "Save Product"}
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       )}
 
-      <div className="content-card">
-        <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-          <div>
-            <h5 className="mb-1">Product Catalogue</h5>
-            <small className="text-muted">
-              {filteredProducts.length} product(s) displayed
-            </small>
-          </div>
+      <div className="card border-0 shadow-sm">
+        <div className="card-body">
+          <div className="row g-3 mb-3">
+            <div className="col-md-8">
+              <div className="input-group">
+                <span className="input-group-text bg-white">
+                  <i className="bi bi-search"></i>
+                </span>
+                <input
+                  className="form-control"
+                  placeholder="Search by product name or ID..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
 
-          <button
-            type="button"
-            className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2"
-            onClick={loadProducts}
-            disabled={loading}
-          >
-            <RefreshCw size={15} />
-            Refresh
-          </button>
-        </div>
+            <div className="col-md-3">
+              <select
+                className="form-select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="ALL">All Products</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
 
-        <div className="row g-2 mb-4">
-          <div className="col-12 col-md-7">
-            <div className="input-group">
-              <span className="input-group-text">
-                <Search size={17} />
-              </span>
-              <input
-                type="search"
-                className="form-control"
-                placeholder="Search by product name or ID..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="col-md-1">
+              <button
+                className="btn btn-outline-secondary w-100"
+                onClick={loadProducts}
+                title="Refresh"
+              >
+                <i className="bi bi-arrow-clockwise"></i>
+              </button>
             </div>
           </div>
 
-          <div className="col-12 col-md-5">
-            <select
-              className="form-select"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              <option value="ALL">All Products</option>
-              <option value="ACTIVE">Active Products</option>
-              <option value="INACTIVE">Inactive Products</option>
-            </select>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-5">
-            <div className="spinner-border text-primary" role="status" />
-            <p className="text-muted mt-2 mb-0">Loading products...</p>
-          </div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-5">
-            <Package size={36} className="text-muted mb-2" />
-            <h6>No products found</h6>
-            <p className="text-muted mb-0">
-              Try changing your search or add a new product.
-            </p>
-          </div>
-        ) : (
-          <div className="table-responsive">
-            <table className="table table-hover align-middle">
-              <thead>
-                <tr>
-                  <th>Product ID</th>
-                  <th>Product Name</th>
-                  <th>Bottle Size</th>
-                  <th>Unit Price</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th className="text-end">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filteredProducts.map((product) => (
-                  <tr key={product.product_id}>
-                    <td>#{product.product_id}</td>
-
-                    <td>
-                      <strong>{product.product_name}</strong>
-                      {product.description && (
-                        <div className="small text-muted">
-                          {product.description}
-                        </div>
-                      )}
-                    </td>
-
-                    <td>{product.unit_size_ml.toLocaleString()} ml</td>
-
-                    <td>
-                      KES{" "}
-                      {Number(product.unit_price).toLocaleString("en-KE", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </td>
-
-                    <td>
-                      <span
-                        className={`badge ${
-                          product.is_active
-                            ? "text-bg-success"
-                            : "text-bg-secondary"
-                        }`}
-                      >
-                        {product.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-
-                    <td>
-                      {new Date(product.created_at).toLocaleDateString()}
-                    </td>
-
-                    <td>
-                      <div className="d-flex justify-content-end gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary"
-                          title="Edit product"
-                          onClick={() => openEditForm(product)}
-                        >
-                          <Pencil size={15} />
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`btn btn-sm ${
-                            product.is_active
-                              ? "btn-outline-danger"
-                              : "btn-outline-success"
-                          }`}
-                          title={
-                            product.is_active
-                              ? "Deactivate product"
-                              : "Activate product"
-                          }
-                          onClick={() => toggleProductStatus(product)}
-                        >
-                          <Power size={15} />
-                        </button>
-                      </div>
-                    </td>
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary"></div>
+              <p className="text-muted mt-2 mb-0">Loading products...</p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover align-middle">
+                <thead className="table-light">
+                  <tr>
+                    <th>ID</th>
+                    <th>Product</th>
+                    <th>Bottle Size</th>
+                    <th>Unit Price</th>
+                    <th>Status</th>
+                    {canManageProducts && <th>Actions</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+
+                <tbody>
+                  {filteredProducts.map((product) => (
+                    <tr key={product.product_id}>
+                      <td>#{product.product_id}</td>
+                      <td>
+                        <div className="fw-semibold">
+                          {product.product_name}
+                        </div>
+                        <small className="text-muted">
+                          {product.description || "No description"}
+                        </small>
+                      </td>
+                      <td>{product.unit_size_ml.toLocaleString()} ml</td>
+                      <td>
+                        KES {Number(product.unit_price).toLocaleString(
+                          "en-KE",
+                          { minimumFractionDigits: 2 }
+                        )}
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            product.is_active
+                              ? "bg-success-subtle text-success"
+                              : "bg-secondary-subtle text-secondary"
+                          }`}
+                        >
+                          {product.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+
+                      {canManageProducts && (
+                        <td>
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => openEditForm(product)}
+                              title="Edit product"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </button>
+
+                            <button
+                              className={`btn btn-sm ${
+                                product.is_active
+                                  ? "btn-outline-danger"
+                                  : "btn-outline-success"
+                              }`}
+                              onClick={() => toggleProductStatus(product)}
+                              title={
+                                product.is_active ? "Deactivate" : "Activate"
+                              }
+                            >
+                              <i
+                                className={`bi ${
+                                  product.is_active
+                                    ? "bi-x-circle"
+                                    : "bi-check-circle"
+                                }`}
+                              ></i>
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+
+                  {filteredProducts.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={canManageProducts ? 6 : 5}
+                        className="text-center text-muted py-5"
+                      >
+                        No products found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,472 +1,544 @@
-import Products from "./pages/Products";
-import { useEffect, useState } from "react";
+
+import React, { useState } from "react";
 import {
   BrowserRouter,
+  Routes,
+  Route,
   Navigate,
   NavLink,
-  Route,
-  Routes,
+  Outlet,
   useNavigate,
 } from "react-router-dom";
 
 import {
   LayoutDashboard,
   Package,
-  Factory,
-  Boxes,
+  ClipboardList,
+  Warehouse,
   ShoppingCart,
   Truck,
   BrainCircuit,
   Users,
   LogOut,
   Menu,
-  Droplets,
+  X,
+  UserCircle,
 } from "lucide-react";
 
-import api from "./services/api";
+import { useAuth } from "./context/AuthContext";
+import Products from "./pages/Products";
 import "./App.css";
 
-// Dashboard response structure
-type DashboardData = {
-  total_products: number;
-  total_stock: number;
-  total_batches: number;
-  total_produced: number;
-  total_sales: number;
-  total_revenue: number;
-  pending_sales: number;
-  completed_deliveries: number;
-  low_stock_products: Array<{
-    product_name?: string;
-    quantity_available?: number;
-    reorder_level?: number;
-  }>;
-};
+type UserRole =
+  | "ADMIN"
+  | "PRODUCTION_MANAGER"
+  | "INVENTORY_MANAGER"
+  | "SALES_OFFICER"
+  | "DISTRIBUTION_OFFICER";
 
-// LOGIN PAGE
-function Login({ onLogin }: { onLogin: () => void }) {
+interface NavigationItem {
+  label: string;
+  path: string;
+  icon: React.ReactNode;
+  roles: UserRole[];
+}
+
+const allRoles: UserRole[] = [
+  "ADMIN",
+  "PRODUCTION_MANAGER",
+  "INVENTORY_MANAGER",
+  "SALES_OFFICER",
+  "DISTRIBUTION_OFFICER",
+];
+
+const navigation: NavigationItem[] = [
+  {
+    label: "Dashboard",
+    path: "/",
+    icon: <LayoutDashboard size={19} />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Products",
+    path: "/products",
+    icon: <Package size={19} />,
+    roles: allRoles,
+  },
+  {
+    label: "Supplier Receipts",
+    path: "/supplier-receipts",
+    icon: <ClipboardList size={19} />,
+    roles: ["ADMIN", "PRODUCTION_MANAGER", "INVENTORY_MANAGER"],
+  },
+  {
+    label: "Inventory",
+    path: "/inventory",
+    icon: <Warehouse size={19} />,
+    roles: allRoles,
+  },
+  {
+    label: "Sales",
+    path: "/sales",
+    icon: <ShoppingCart size={19} />,
+    roles: ["ADMIN", "SALES_OFFICER", "DISTRIBUTION_OFFICER"],
+  },
+  {
+    label: "Distribution",
+    path: "/distribution",
+    icon: <Truck size={19} />,
+    roles: ["ADMIN", "DISTRIBUTION_OFFICER"],
+  },
+  {
+    label: "Predictions",
+    path: "/predictions",
+    icon: <BrainCircuit size={19} />,
+    roles: allRoles,
+  },
+  {
+    label: "User Management",
+    path: "/users",
+    icon: <Users size={19} />,
+    roles: ["ADMIN"],
+  },
+];
+
+function getRoleLabel(role: string) {
+  return role
+    .split("_")
+    .map(
+      (word) => word.charAt(0) + word.slice(1).toLowerCase()
+    )
+    .join(" ");
+}
+
+function LoadingScreen() {
+  return (
+    <div className="min-vh-100 d-flex justify-content-center align-items-center">
+      <div className="text-center">
+        <div className="spinner-border text-primary mb-3"></div>
+        <p className="text-muted">Loading KQuench...</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const navigate = useNavigate();
-
-  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
 
     setError("");
-    setLoading(true);
+    setSubmitting(true);
 
     try {
-      const response = await api.post("token/", {
-        username,
-        password,
-      });
+      await login(username, password);
 
-      localStorage.setItem("access_token", response.data.access);
-      localStorage.setItem("refresh_token", response.data.refresh);
+      // Navigate after authentication succeeds.
+      navigate("/", { replace: true });
+    } catch (err: any) {
+      const data = err?.response?.data;
 
-      onLogin();
-      navigate("/");
-    } catch {
-      setError("Login failed. Check your username and password.");
+      setError(
+        data?.detail ||
+          data?.non_field_errors?.[0] ||
+          "Login failed. Please check your credentials."
+      );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="brand-icon">
-          <Droplets size={30} />
-        </div>
-
-        <h2>KQuench</h2>
-
-        <p className="text-muted">
-          Water Production Management System
-        </p>
-
-        <form onSubmit={handleLogin}>
-          <div className="mb-3">
-            <label className="form-label">Username</label>
-            <input
-              type="text"
-              className="form-control"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              autoComplete="username"
-              required
-            />
-          </div>
-
-          <div className="mb-3">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-control"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              required
-            />
+    <div className="container-fluid min-vh-100 d-flex align-items-center justify-content-center bg-light">
+      <div
+        className="card border-0 shadow-sm"
+        style={{ width: "100%", maxWidth: 420 }}
+      >
+        <div className="card-body p-4 p-md-5">
+          <div className="text-center mb-4">
+            <h2 className="fw-bold text-primary">KQuench</h2>
+            <p className="text-muted">
+              Water Operations Management System
+            </p>
           </div>
 
           {error && (
-            <div className="alert alert-danger">
-              {error}
-            </div>
+            <div className="alert alert-danger">{error}</div>
           )}
 
-          <button
-            type="submit"
-            className="btn btn-primary w-100"
-            disabled={loading}
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit}>
+            <div className="mb-3">
+              <label className="form-label">Username</label>
+              <input
+                type="text"
+                className="form-control"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                className="form-control"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary w-100"
+              disabled={submitting}
+            >
+              {submitting ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
 }
 
-// SIDEBAR
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const links = [
-    { to: "/", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/products", label: "Products", icon: Package },
-    { to: "/production", label: "Production", icon: Factory },
-    { to: "/inventory", label: "Inventory", icon: Boxes },
-    { to: "/sales", label: "Sales", icon: ShoppingCart },
-    { to: "/distribution", label: "Distribution", icon: Truck },
-    { to: "/predictions", label: "Predictions", icon: BrainCircuit },
-    { to: "/users", label: "User Management", icon: Users },
-  ];
+function ProtectedRoute() {
+  const { user, loading } = useAuth();
 
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <Droplets size={27} />
-        <span>KQuench</span>
-      </div>
+  if (loading) return <LoadingScreen />;
 
-      <div className="sidebar-section">MAIN MENU</div>
+  if (!user) return <Navigate to="/login" replace />;
 
-      <nav>
-        {links.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            className={({ isActive }) =>
-              `sidebar-link ${isActive ? "active" : ""}`
-            }
-            onClick={onNavigate}
-          >
-            <Icon size={19} />
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
-
-      <div className="sidebar-footer">
-        <button
-          type="button"
-          className="logout-button"
-          onClick={() => {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("refresh_token");
-            window.location.href = "/login";
-          }}
-        >
-          <LogOut size={18} />
-          <span>Sign Out</span>
-        </button>
-      </div>
-    </aside>
-  );
+  return <Outlet />;
 }
 
-// DASHBOARD
-function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+function RoleRoute({
+  allowedRoles,
+  children,
+}: {
+  allowedRoles: UserRole[];
+  children: React.ReactNode;
+}) {
+  const { user } = useAuth();
 
-  useEffect(() => {
-    api
-      .get("dashboard/")
-      .then((response) => {
-        setData(response.data);
-      })
-      .catch(() => {
-        setError("Unable to load dashboard data. Please try again.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
+  if (!user) return <Navigate to="/login" replace />;
 
-  const stats = [
-    {
-      label: "Total Products",
-      value: data?.total_products ?? 0,
-      icon: Package,
-      color: "blue",
-    },
-    {
-      label: "Available Stock",
-      value: data?.total_stock ?? 0,
-      icon: Boxes,
-      color: "green",
-    },
-    {
-      label: "Production Batches",
-      value: data?.total_batches ?? 0,
-      icon: Factory,
-      color: "orange",
-    },
-    {
-      label: "Total Sales",
-      value: data?.total_sales ?? 0,
-      icon: ShoppingCart,
-      color: "purple",
-    },
-  ];
-
-  if (loading) {
-    return <p>Loading dashboard...</p>;
+  if (!allowedRoles.includes(user.role as UserRole)) {
+    return <Navigate to="/products" replace />;
   }
 
+  return <>{children}</>;
+}
+
+function HomeRedirect() {
+  const { user } = useAuth();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (user.role === "ADMIN") {
+    return <Dashboard />;
+  }
+
+  return <Navigate to="/products" replace />;
+}
+
+function Dashboard() {
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <h2>Dashboard</h2>
-          <p>Overview of your water production and operations.</p>
-        </div>
-      </div>
-
-      {error && (
-        <div className="alert alert-warning">
-          {error}
-        </div>
-      )}
-
-      <div className="row g-3 mb-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-
-          return (
-            <div
-              className="col-12 col-sm-6 col-xl-3"
-              key={stat.label}
-            >
-              <div className="stat-card">
-                <div className={`stat-icon ${stat.color}`}>
-                  <Icon size={22} />
-                </div>
-
-                <p>{stat.label}</p>
-
-                <h3>{stat.value.toLocaleString()}</h3>
-              </div>
-            </div>
-          );
-        })}
+    <div className="container-fluid py-4">
+      <div className="mb-4">
+        <h3 className="fw-bold mb-1">Dashboard</h3>
+        <p className="text-muted mb-0">
+          Overview of KQuench operations.
+        </p>
       </div>
 
       <div className="row g-3">
-        <div className="col-12 col-lg-7">
-          <div className="content-card">
-            <h5>Operations Summary</h5>
-
-            <div className="summary-row">
-              <span>Total Produced</span>
-              <strong>{data?.total_produced ?? 0}</strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Pending Sales</span>
-              <strong>{data?.pending_sales ?? 0}</strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Completed Deliveries</span>
-              <strong>{data?.completed_deliveries ?? 0}</strong>
-            </div>
-
-            <div className="summary-row">
-              <span>Total Revenue</span>
-              <strong>
-                KES {(data?.total_revenue ?? 0).toLocaleString()}
-              </strong>
+        {[
+          {
+            title: "Products",
+            description: "Manage bottled water products",
+          },
+          {
+            title: "Supplier Receipts",
+            description: "Record received stock",
+          },
+          {
+            title: "Inventory",
+            description: "Monitor available stock",
+          },
+          {
+            title: "Sales",
+            description: "Manage external sales",
+          },
+          {
+            title: "Distribution",
+            description: "Manage internal deliveries",
+          },
+          {
+            title: "Predictions",
+            description: "View future demand forecasts",
+          },
+        ].map((item) => (
+          <div className="col-md-4" key={item.title}>
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-body">
+                <h5 className="fw-semibold">{item.title}</h5>
+                <p className="text-muted mb-0">
+                  {item.description}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="col-12 col-lg-5">
-          <div className="content-card">
-            <h5>Low Stock Products</h5>
-
-            {data?.low_stock_products?.length ? (
-              data.low_stock_products.map((product, index) => (
-                <div className="summary-row" key={index}>
-                  <span>
-                    {product.product_name ?? "Product"}
-                  </span>
-
-                  <strong className="text-danger">
-                    {product.quantity_available ?? 0}
-                  </strong>
-                </div>
-              ))
-            ) : (
-              <p className="text-muted mb-0">
-                No low-stock products reported.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// PLACEHOLDER FOR MODULES UNDER DEVELOPMENT
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="page-heading">
-      <div>
-        <h2>{title}</h2>
-        <p>
-          This module will be connected to the Django API next.
-        </p>
+        ))}
       </div>
     </div>
   );
 }
 
-// MAIN APPLICATION LAYOUT
+function PlaceholderPage({ title }: { title: string }) {
+  return (
+    <div className="container-fluid py-4">
+      <div className="card border-0 shadow-sm">
+        <div className="card-body p-5 text-center">
+          <h3 className="fw-bold">{title}</h3>
+          <p className="text-muted mb-0">
+            This module will be connected to the backend.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MainLayout() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const visibleNavigation = navigation.filter((item) =>
+    item.roles.includes(user.role as UserRole)
+  );
 
   return (
-    <div className="app-layout">
-      <div
-        className={`sidebar-overlay ${menuOpen ? "show" : ""}`}
-        onClick={() => setMenuOpen(false)}
-      />
+    <div className="d-flex min-vh-100 bg-light">
+      {sidebarOpen && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-lg-none"
+          style={{ zIndex: 1030 }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-      <div className={`sidebar-wrapper ${menuOpen ? "open" : ""}`}>
-        <Sidebar onNavigate={() => setMenuOpen(false)} />
-      </div>
+      <aside
+        className={`bg-dark text-white d-flex flex-column ${
+          sidebarOpen ? "kquench-sidebar-open" : ""
+        }`}
+        style={{
+          width: 255,
+          minWidth: 255,
+          zIndex: 1040,
+        }}
+      >
+        <div className="px-4 py-4 border-bottom border-secondary d-flex justify-content-between align-items-center">
+          <div>
+            <h4 className="fw-bold mb-0">KQuench</h4>
+            <small className="text-white-50">
+              Operations System
+            </small>
+          </div>
 
-      <main className="main-content">
-        <header className="topbar">
           <button
-            type="button"
-            className="mobile-menu"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle navigation"
+            className="btn btn-sm btn-outline-light d-lg-none"
+            onClick={() => setSidebarOpen(false)}
           >
-            <Menu size={22} />
+            <X size={18} />
+          </button>
+        </div>
+
+        <nav className="flex-grow-1 p-3">
+          <small className="text-white-50 px-2 d-block mb-3">
+            MAIN MENU
+          </small>
+
+          {visibleNavigation.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === "/"}
+              onClick={() => setSidebarOpen(false)}
+              className={({ isActive }) =>
+                `d-flex align-items-center gap-3 text-decoration-none rounded px-3 py-3 mb-1 ${
+                  isActive
+                    ? "bg-primary text-white"
+                    : "text-white-50"
+                }`
+              }
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="p-3 border-top border-secondary">
+          <div className="d-flex align-items-center gap-2 mb-3">
+            <UserCircle size={28} />
+
+            <div className="overflow-hidden">
+              <div className="fw-semibold text-truncate">
+                {user.username}
+              </div>
+              <small className="text-white-50">
+                {getRoleLabel(user.role)}
+              </small>
+            </div>
+          </div>
+
+          <button
+            className="btn btn-outline-light w-100 d-flex align-items-center justify-content-center gap-2"
+            onClick={logout}
+          >
+            <LogOut size={17} />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-grow-1 min-vh-100 overflow-hidden">
+        <header className="bg-white border-bottom px-3 px-md-4 py-3 d-flex justify-content-between align-items-center">
+          <button
+            className="btn btn-outline-secondary d-lg-none"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu size={20} />
           </button>
 
-          <span className="topbar-title">
-            Management Portal
-          </span>
+          <div className="d-none d-lg-block fw-semibold">
+            KQuench Management
+          </div>
 
-          <span className="topbar-user">
-            Administrator
-          </span>
+          <div className="d-flex align-items-center gap-2">
+            <UserCircle size={20} className="text-secondary" />
+            <span className="small fw-semibold">
+              {user.username}
+            </span>
+          </div>
         </header>
 
-        <div className="page-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-
-            <Route
-              path="/products"
-              element={<Products />}
-            />
-
-            <Route
-              path="/production"
-              element={<Placeholder title="Production" />}
-            />
-
-            <Route
-              path="/inventory"
-              element={<Placeholder title="Inventory" />}
-            />
-
-            <Route
-              path="/sales"
-              element={<Placeholder title="Sales" />}
-            />
-
-            <Route
-              path="/distribution"
-              element={<Placeholder title="Distribution" />}
-            />
-
-            <Route
-              path="/predictions"
-              element={<Placeholder title="Predictive Analysis" />}
-            />
-
-            <Route
-              path="/users"
-              element={<Placeholder title="User Management" />}
-            />
-
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </main>
+        <main className="p-3 p-md-4">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
 
-// ROOT APPLICATION
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    Boolean(localStorage.getItem("access_token"))
-  );
+function ProductsAccess() {
+  const { user } = useAuth();
 
+  if (!user) return <Navigate to="/login" replace />;
+
+  return <Products role={user.role} />;
+}
+
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/login"
-          element={
-            isAuthenticated ? (
-              <Navigate to="/" replace />
-            ) : (
-              <Login onLogin={() => setIsAuthenticated(true)} />
-            )
-          }
-        />
+        <Route path="/login" element={<LoginPage />} />
 
-        <Route
-          path="/*"
-          element={
-            isAuthenticated ? (
-              <MainLayout />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
+            <Route index element={<HomeRedirect />} />
+
+            <Route
+              path="products"
+              element={<ProductsAccess />}
+            />
+
+            <Route
+              path="supplier-receipts"
+              element={
+                <RoleRoute
+                  allowedRoles={[
+                    "ADMIN",
+                    "PRODUCTION_MANAGER",
+                    "INVENTORY_MANAGER",
+                  ]}
+                >
+                  <PlaceholderPage title="Supplier Receipts" />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="inventory"
+              element={<PlaceholderPage title="Inventory Management" />}
+            />
+
+            <Route
+              path="sales"
+              element={
+                <RoleRoute
+                  allowedRoles={[
+                    "ADMIN",
+                    "SALES_OFFICER",
+                    "DISTRIBUTION_OFFICER",
+                  ]}
+                >
+                  <PlaceholderPage title="Sales Management" />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="distribution"
+              element={
+                <RoleRoute
+                  allowedRoles={[
+                    "ADMIN",
+                    "DISTRIBUTION_OFFICER",
+                  ]}
+                >
+                  <PlaceholderPage title="Distribution Management" />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="predictions"
+              element={<PlaceholderPage title="Predictive Analysis" />}
+            />
+
+            <Route
+              path="users"
+              element={
+                <RoleRoute allowedRoles={["ADMIN"]}>
+                  <PlaceholderPage title="User Management" />
+                </RoleRoute>
+              }
+            />
+
+            <Route
+              path="*"
+              element={<Navigate to="/" replace />}
+            />
+          </Route>
+        </Route>
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;
