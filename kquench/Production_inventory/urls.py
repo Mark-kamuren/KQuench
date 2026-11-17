@@ -10,8 +10,17 @@ from .views import (
 router = DefaultRouter()
 router.register('products', ProductViewSet)
 router.register('production', ProductionBatchViewSet)
-router.register('inventory', InventoryViewSet)
-router.register('inventory/transactions', InventoryTransactionViewSet)
 router.register('supplier-receipts', SupplierReceiptViewSet,basename='supplier-receipt')
+router.register(
+    'inventory/transactions',
+    InventoryTransactionViewSet,
+    basename='inventory-transaction'
+)
+
+router.register(
+    'inventory',
+    InventoryViewSet,
+    basename='inventory'
+)
 
 urlpatterns = router.urls
