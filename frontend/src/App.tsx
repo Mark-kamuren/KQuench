@@ -17,7 +17,7 @@ import {
   ShoppingCart,
   Truck,
   BrainCircuit,
-  Users,
+  Users as UsersIcon,
   LogOut,
   Menu,
   X,
@@ -31,6 +31,8 @@ import Dashboard from "./pages/Dashboard";
 import SupplierReceipts from "./pages/SupplierReceipts";
 import Inventory from "./pages/Inventory";
 import Sales from "./pages/Sales";
+import Distribution from "./pages/Distribution";
+import Users from "./pages/Users";
 
 import "./App.css";
 
@@ -102,7 +104,7 @@ const navigation: NavigationItem[] = [
   {
     label: "User Management",
     path: "/users",
-    icon: <Users size={19} />,
+    icon: <UsersIcon size={19} />,
     roles: ["ADMIN"],
   },
 ];
@@ -125,7 +127,6 @@ function LoadingScreen() {
   );
 }
 
-// Login page
 function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -216,7 +217,6 @@ function LoginPage() {
   );
 }
 
-// Protect routes from unauthenticated users
 function ProtectedRoute() {
   const { user, loading } = useAuth();
 
@@ -229,7 +229,6 @@ function ProtectedRoute() {
   return <Outlet />;
 }
 
-// Restrict access according to user role
 function RoleRoute({
   allowedRoles,
   children,
@@ -250,7 +249,6 @@ function RoleRoute({
   return <>{children}</>;
 }
 
-// Admin dashboard; operational users go to Products
 function HomeRedirect() {
   const { user } = useAuth();
 
@@ -265,7 +263,6 @@ function HomeRedirect() {
   return <Navigate to="/products" replace />;
 }
 
-// Products receives the current user's role
 function ProductsAccess() {
   const { user } = useAuth();
 
@@ -276,7 +273,6 @@ function ProductsAccess() {
   return <Products role={user.role} />;
 }
 
-// Placeholder for modules not yet connected
 function PlaceholderPage({ title }: { title: string }) {
   return (
     <div className="container-fluid py-4">
@@ -292,7 +288,6 @@ function PlaceholderPage({ title }: { title: string }) {
   );
 }
 
-// Main application layout
 function MainLayout() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -307,7 +302,6 @@ function MainLayout() {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
-
       {sidebarOpen && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-lg-none"
@@ -421,7 +415,6 @@ function MainLayout() {
   );
 }
 
-// Application routes
 export default function App() {
   return (
     <BrowserRouter>
@@ -430,7 +423,6 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
-
             <Route index element={<HomeRedirect />} />
 
             <Route
@@ -482,7 +474,7 @@ export default function App() {
                     "DISTRIBUTION_OFFICER",
                   ]}
                 >
-                  <PlaceholderPage title="Distribution Management" />
+                  <Distribution />
                 </RoleRoute>
               }
             />
@@ -498,7 +490,7 @@ export default function App() {
               path="users"
               element={
                 <RoleRoute allowedRoles={["ADMIN"]}>
-                  <PlaceholderPage title="User Management" />
+                  <Users />
                 </RoleRoute>
               }
             />
@@ -507,7 +499,6 @@ export default function App() {
               path="*"
               element={<Navigate to="/" replace />}
             />
-
           </Route>
         </Route>
       </Routes>
