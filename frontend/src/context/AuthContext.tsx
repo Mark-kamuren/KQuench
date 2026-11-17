@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useContext,
@@ -6,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+
 import api from "../services/api";
 
 export type User = {
@@ -24,31 +24,41 @@ type AuthContextType = {
   logout: () => void;
 };
 
+type TokenResponse = {
+  access: string;
+  refresh: string;
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+async function fetchCurrentUser(token: string): Promise<User> {
+  const response = await api.get<User>("users/me/", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function loadUser(token: string) {
-    const response = await api.get<User>("users/me/", {
-      headers: { Authorization: `Bearer ${token}` },
+  async function login(username: string, password: string) {
+    const response = await api.post<TokenResponse>("token/", {
+      username,
+      password,
     });
 
-    setUser(response.data);
-  }
-
-  async function login(username: string, password: string) {
-    const response = await api.post("token/", { username, password });
-
-    const access = response.data.access;
-    const refresh = response.data.refresh;
+    const { access, refresh } = response.data;
 
     localStorage.setItem("access_token", access);
     localStorage.setItem("refresh_token", refresh);
 
     try {
-      await loadUser(access);
+      const currentUser = await fetchCurrentUser(access);
+      setUser(currentUser);
     } catch (error) {
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
@@ -64,24 +74,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
+    let mounted = true;
 
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    async function initializeAuth() {
+      const token = localStorage.getItem("access_token");
 
-    loadUser(token)
-      .catch(() => {
+      if (!token) {
+        if (mounted) setLoading(false);
+        return;
+      }
+
+      try {
+        const currentUser = await fetchCurrentUser(token);
+
+        if (mounted) {
+          setUser(currentUser);
+        }
+      } catch {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
-        setUser(null);
-      })
-      .finally(() => setLoading(false));
+
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
