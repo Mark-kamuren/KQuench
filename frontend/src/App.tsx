@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   BrowserRouter,
@@ -26,7 +25,13 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "./context/AuthContext";
+
 import Products from "./pages/Products";
+import Dashboard from "./pages/Dashboard";
+import SupplierReceipts from "./pages/SupplierReceipts";
+import Inventory from "./pages/Inventory";
+import Sales from "./pages/Sales";
+
 import "./App.css";
 
 type UserRole =
@@ -105,9 +110,7 @@ const navigation: NavigationItem[] = [
 function getRoleLabel(role: string) {
   return role
     .split("_")
-    .map(
-      (word) => word.charAt(0) + word.slice(1).toLowerCase()
-    )
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
     .join(" ");
 }
 
@@ -115,13 +118,14 @@ function LoadingScreen() {
   return (
     <div className="min-vh-100 d-flex justify-content-center align-items-center">
       <div className="text-center">
-        <div className="spinner-border text-primary mb-3"></div>
+        <div className="spinner-border text-primary mb-3" />
         <p className="text-muted">Loading KQuench...</p>
       </div>
     </div>
   );
 }
 
+// Login page
 function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -141,8 +145,6 @@ function LoginPage() {
 
     try {
       await login(username, password);
-
-      // Navigate after authentication succeeds.
       navigate("/", { replace: true });
     } catch (err: any) {
       const data = err?.response?.data;
@@ -214,16 +216,20 @@ function LoginPage() {
   );
 }
 
+// Protect routes from unauthenticated users
 function ProtectedRoute() {
   const { user, loading } = useAuth();
 
   if (loading) return <LoadingScreen />;
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   return <Outlet />;
 }
 
+// Restrict access according to user role
 function RoleRoute({
   allowedRoles,
   children,
@@ -233,7 +239,9 @@ function RoleRoute({
 }) {
   const { user } = useAuth();
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (!allowedRoles.includes(user.role as UserRole)) {
     return <Navigate to="/products" replace />;
@@ -242,10 +250,13 @@ function RoleRoute({
   return <>{children}</>;
 }
 
+// Admin dashboard; operational users go to Products
 function HomeRedirect() {
   const { user } = useAuth();
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (user.role === "ADMIN") {
     return <Dashboard />;
@@ -254,59 +265,18 @@ function HomeRedirect() {
   return <Navigate to="/products" replace />;
 }
 
-function Dashboard() {
-  return (
-    <div className="container-fluid py-4">
-      <div className="mb-4">
-        <h3 className="fw-bold mb-1">Dashboard</h3>
-        <p className="text-muted mb-0">
-          Overview of KQuench operations.
-        </p>
-      </div>
+// Products receives the current user's role
+function ProductsAccess() {
+  const { user } = useAuth();
 
-      <div className="row g-3">
-        {[
-          {
-            title: "Products",
-            description: "Manage bottled water products",
-          },
-          {
-            title: "Supplier Receipts",
-            description: "Record received stock",
-          },
-          {
-            title: "Inventory",
-            description: "Monitor available stock",
-          },
-          {
-            title: "Sales",
-            description: "Manage external sales",
-          },
-          {
-            title: "Distribution",
-            description: "Manage internal deliveries",
-          },
-          {
-            title: "Predictions",
-            description: "View future demand forecasts",
-          },
-        ].map((item) => (
-          <div className="col-md-4" key={item.title}>
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body">
-                <h5 className="fw-semibold">{item.title}</h5>
-                <p className="text-muted mb-0">
-                  {item.description}
-                </p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Products role={user.role} />;
 }
 
+// Placeholder for modules not yet connected
 function PlaceholderPage({ title }: { title: string }) {
   return (
     <div className="container-fluid py-4">
@@ -322,11 +292,14 @@ function PlaceholderPage({ title }: { title: string }) {
   );
 }
 
+// Main application layout
 function MainLayout() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   const visibleNavigation = navigation.filter((item) =>
     item.roles.includes(user.role as UserRole)
@@ -334,6 +307,7 @@ function MainLayout() {
 
   return (
     <div className="d-flex min-vh-100 bg-light">
+
       {sidebarOpen && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-lg-none"
@@ -401,6 +375,7 @@ function MainLayout() {
               <div className="fw-semibold text-truncate">
                 {user.username}
               </div>
+
               <small className="text-white-50">
                 {getRoleLabel(user.role)}
               </small>
@@ -446,14 +421,7 @@ function MainLayout() {
   );
 }
 
-function ProductsAccess() {
-  const { user } = useAuth();
-
-  if (!user) return <Navigate to="/login" replace />;
-
-  return <Products role={user.role} />;
-}
-
+// Application routes
 export default function App() {
   return (
     <BrowserRouter>
@@ -462,6 +430,7 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<MainLayout />}>
+
             <Route index element={<HomeRedirect />} />
 
             <Route
@@ -479,14 +448,14 @@ export default function App() {
                     "INVENTORY_MANAGER",
                   ]}
                 >
-                  <PlaceholderPage title="Supplier Receipts" />
+                  <SupplierReceipts />
                 </RoleRoute>
               }
             />
 
             <Route
               path="inventory"
-              element={<PlaceholderPage title="Inventory Management" />}
+              element={<Inventory />}
             />
 
             <Route
@@ -499,7 +468,7 @@ export default function App() {
                     "DISTRIBUTION_OFFICER",
                   ]}
                 >
-                  <PlaceholderPage title="Sales Management" />
+                  <Sales />
                 </RoleRoute>
               }
             />
@@ -520,7 +489,9 @@ export default function App() {
 
             <Route
               path="predictions"
-              element={<PlaceholderPage title="Predictive Analysis" />}
+              element={
+                <PlaceholderPage title="Predictive Analysis" />
+              }
             />
 
             <Route
@@ -536,6 +507,7 @@ export default function App() {
               path="*"
               element={<Navigate to="/" replace />}
             />
+
           </Route>
         </Route>
       </Routes>
