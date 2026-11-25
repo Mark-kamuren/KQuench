@@ -1,10 +1,11 @@
-from rest_framework.routers import DefaultRouter
 from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
 from .views import (
     DemandForecastViewSet,
     ForecastGenerationViewSet,
-    PredictionRunViewSet, 
-    PredictionViewSet
+    PredictionRunViewSet,
+    PredictionViewSet,
 )
 
 router = DefaultRouter()
@@ -15,6 +16,18 @@ router.register(
     basename="demand-forecasts",
 )
 
+router.register(
+    "prediction-runs",
+    PredictionRunViewSet,
+    basename="prediction-runs",
+)
+
+router.register(
+    "predictions",
+    PredictionViewSet,
+    basename="predictions",
+)
+
 urlpatterns = [
     path(
         "generate-forecast/",
@@ -23,6 +36,3 @@ urlpatterns = [
     ),
     path("", include(router.urls)),
 ]
-
-router.register('prediction-runs', PredictionRunViewSet)
-router.register('predictions', PredictionViewSet)
