@@ -168,6 +168,7 @@ def build_forecast_features(history, feature_columns):
 
     last_date = history.index[-1]
     forecast_date = last_date + pd.Timedelta(days=1)
+    forecast_date = pd.Timestamp(forecast_date)
 
     features = {}
 
