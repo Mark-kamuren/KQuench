@@ -33,6 +33,7 @@ import Inventory from "./pages/Inventory";
 import Sales from "./pages/Sales";
 import Distribution from "./pages/Distribution";
 import Users from "./pages/Users";
+import Predictions from "./pages/Predictions";
 
 import "./App.css";
 
@@ -273,21 +274,6 @@ function ProductsAccess() {
   return <Products role={user.role} />;
 }
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="container-fluid py-4">
-      <div className="card border-0 shadow-sm">
-        <div className="card-body p-5 text-center">
-          <h3 className="fw-bold">{title}</h3>
-          <p className="text-muted mb-0">
-            This module will be connected to the backend.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function MainLayout() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -479,11 +465,9 @@ export default function App() {
               }
             />
 
-            <Route
+            <Route  
               path="predictions"
-              element={
-                <PlaceholderPage title="Predictive Analysis" />
-              }
+              element={<Predictions />}
             />
 
             <Route
