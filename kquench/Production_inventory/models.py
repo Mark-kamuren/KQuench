@@ -2,6 +2,9 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.core.validators import MinValueValidator
+import uuid
+from decimal import Decimal
+from django.utils import timezone
 
 class Product(models.Model):
     product_id = models.BigAutoField(primary_key=True)
@@ -23,6 +26,56 @@ class Product(models.Model):
     def __str__(self):
         return self.product_name
 
+
+class WaterSupplyReceipt(models.Model):
+    receipt_id = models.BigAutoField(primary_key=True)
+
+    supplier_name = models.CharField(
+        max_length=150,
+        default="Nairobi Water"
+    )
+
+    reference = models.CharField(
+        max_length=40,
+        unique=True,
+        editable=False
+    )
+
+    received_date = models.DateField()
+
+    quantity_received_litres = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.001"))]
+    )
+
+    notes = models.TextField(blank=True, null=True)
+
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="water_receipts_created"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "water_supply_receipts"
+        ordering = ["-received_date", "-receipt_id"]
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            date_part = self.received_date.strftime("%Y%m%d")
+            unique_part = uuid.uuid4().hex[:8].upper()
+            self.reference = f"NW-{date_part}-{unique_part}"
+
+        self.supplier_name = "Nairobi Water"
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.reference} - {self.quantity_received_litres} L"
 
 # Retained for historical production records.
 class ProductionBatch(models.Model):
@@ -52,6 +105,77 @@ class ProductionBatch(models.Model):
     def __str__(self):
         return self.batch_number
 
+class BottlingBatch(models.Model):
+    bottling_batch_id = models.BigAutoField(primary_key=True)
+
+    batch_number = models.CharField(
+        max_length=50,
+        unique=True,
+        blank=True
+    )
+
+    water_receipt = models.ForeignKey(
+        WaterSupplyReceipt,
+        on_delete=models.PROTECT,
+        related_name="bottling_batches"
+    )
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name="bottling_batches"
+    )
+
+    bottles_produced = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)]
+    )
+
+    finished_water_litres = models.DecimalField(
+        max_digits=14,
+        decimal_places=3
+    )
+
+    water_used_litres = models.DecimalField(
+        max_digits=14,
+        decimal_places=6
+    )
+
+    water_loss_litres = models.DecimalField(
+        max_digits=14,
+        decimal_places=6
+    )
+
+    loss_percentage = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal("2.00")
+    )
+
+    bottling_date = models.DateTimeField(default=timezone.now)
+
+    notes = models.TextField(blank=True, null=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="bottling_batches_created"
+    )
+
+    class Meta:
+        db_table = "bottling_batches"
+        ordering = ["-bottling_date"]
+
+    def save(self, *args, **kwargs):
+        if not self.batch_number:
+            date_part = timezone.localdate().strftime("%Y%m%d")
+            unique_part = uuid.uuid4().hex[:8].upper()
+            self.batch_number = f"KQB-{date_part}-{unique_part}"
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.batch_number
 
 class SupplierReceipt(models.Model):
     receipt_id = models.BigAutoField(primary_key=True)
@@ -85,32 +209,28 @@ class SupplierReceipt(models.Model):
 
 class Inventory(models.Model):
     inventory_id = models.BigAutoField(primary_key=True)
+
     product = models.OneToOneField(
         Product,
         on_delete=models.PROTECT,
-        related_name='inventory'
+        related_name="inventory"
     )
+
     quantity_available = models.PositiveIntegerField(default=0)
-    reorder_level = models.PositiveIntegerField(default=0)
+
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'inventory'
+        db_table = "inventory"
         constraints = [
             models.CheckConstraint(
                 condition=Q(quantity_available__gte=0),
-                name='inventory_quantity_nonnegative'
-            ),
-            models.CheckConstraint(
-                condition=Q(reorder_level__gte=0),
-                name='inventory_reorder_nonnegative'
+                name="inventory_quantity_nonnegative"
             ),
         ]
 
     def __str__(self):
-        return f'{self.product.product_name}: {self.quantity_available}'
-
-
+        return f"{self.product.product_name}: {self.quantity_available}"
 class InventoryTransaction(models.Model):
 
     class TransactionTypes(models.TextChoices):
@@ -123,6 +243,7 @@ class InventoryTransaction(models.Model):
         # Retain historical transaction values.
         PRODUCTION = 'PRODUCTION', 'Legacy Production'
         DELIVERY = 'DELIVERY', 'Legacy Delivery'
+        BOTTLING = "BOTTLING", "Bottling"
 
     transaction_id = models.BigAutoField(primary_key=True)
     product = models.ForeignKey(
@@ -156,6 +277,13 @@ class InventoryTransaction(models.Model):
         related_name='inventory_transactions'
     )
 
+    bottling_batch = models.ForeignKey(
+    BottlingBatch,
+    on_delete=models.PROTECT,
+    null=True,
+    blank=True,
+    related_name="inventory_transactions"
+)
     # Retained for the existing distribution implementation.
     distribution_item = models.OneToOneField(
         'Distribution.DistributionItem',
