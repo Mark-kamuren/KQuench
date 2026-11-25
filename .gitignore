@@ -17,6 +17,11 @@ kquench_backup.sql
 frontend/node_modules/
 frontend/dist/
 
+# Machine learning model binaries
+kquench/Predictions/saved_models/*.joblib
+kquench/Predictions/saved_models/*.ubj
+kquench/Predictions/saved_models/kquench_saved_models/
+
 # IDE
 .vscode/
 .idea/
@@ -24,3 +29,6 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Operational seed data command
+kquench/Production_inventory/management
