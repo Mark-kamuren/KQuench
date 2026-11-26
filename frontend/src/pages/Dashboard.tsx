@@ -6,7 +6,6 @@ import {
   Warehouse,
   ShoppingCart,
   Truck,
-  Banknote,
   Factory,
   ClipboardList,
   RefreshCw,
@@ -54,13 +53,6 @@ const initialData: DashboardData = {
 
 function formatNumber(value: number | undefined): string {
   return Number(value || 0).toLocaleString("en-KE");
-}
-
-function formatCurrency(value: number | undefined): string {
-  return `KSh ${Number(value || 0).toLocaleString("en-KE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
 }
 
 function StatCard({
