@@ -1,6 +1,23 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import {
+  Droplets,
+  Factory,
+  RefreshCw,
+  Plus,
+} from "lucide-react";
+
 import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
+
+interface WaterReceipt {
+  receipt_id: number;
+  supplier_name: string;
+  reference: string;
+  received_date: string;
+  quantity_received_litres: number;
+  notes?: string;
+}
 
 interface Product {
   product_id: number;
@@ -9,282 +26,604 @@ interface Product {
   is_active: boolean;
 }
 
-interface Receipt {
-  receipt_id: number;
-  supplier_name: string;
-  delivery_reference: string;
+interface BottlingBatch {
+  bottling_batch_id: number;
+  batch_number: string;
+  water_receipt: number;
+  water_receipt_reference?: string;
   product: number;
-  product_name: string;
-  received_date: string;
-  quantity_received: number;
-  notes: string;
-  created_at: string;
+  product_name?: string;
+  bottles_produced: number;
+  finished_water_litres: number;
+  water_used_litres: number;
+  water_loss_litres: number;
+  loss_percentage: number;
+  bottling_date: string;
+  notes?: string;
 }
 
-function errorMessage(error: any) {
-  const data = error?.response?.data;
-  if (data?.detail) return data.detail;
-  if (!data) return "An unexpected error occurred.";
+function extractList<T>(data: any): T[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+}
 
-  return Object.entries(data)
-    .map(([key, value]) =>
-      `${key}: ${Array.isArray(value) ? value.join(", ") : value}`
-    )
-    .join(" | ");
+function errorMessage(error: any): string {
+  const data = error?.response?.data;
+
+  if (typeof data === "string") return data;
+  if (data?.detail) return data.detail;
+  if (data?.error) return data.error;
+
+  if (data && typeof data === "object") {
+    const firstValue = Object.values(data)[0];
+
+    if (Array.isArray(firstValue)) {
+      return String(firstValue[0]);
+    }
+
+    if (firstValue) return String(firstValue);
+  }
+
+  return "The operation could not be completed.";
+}
+
+function formatNumber(value: number | undefined): string {
+  return Number(value || 0).toLocaleString("en-KE", {
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function SupplierReceipts() {
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const { user } = useAuth();
+
+  const canCreate = [
+    "ADMIN",
+    "PRODUCTION_MANAGER",
+  ].includes(user?.role || "");
+
+  const [receipts, setReceipts] = useState<WaterReceipt[]>([]);
+  const [batches, setBatches] = useState<BottlingBatch[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const [form, setForm] = useState({
-    supplier_name: "",
-    delivery_reference: "",
-    product: "",
-    received_date: new Date().toISOString().slice(0, 10),
-    quantity_received: "",
-    notes: "",
-  });
+  const [activeTab, setActiveTab] = useState<
+    "receipts" | "bottling"
+  >("receipts");
 
-  async function loadData() {
+  const [receiptDate, setReceiptDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [litresReceived, setLitresReceived] = useState("");
+  const [receiptNotes, setReceiptNotes] = useState("");
+
+  const [selectedReceipt, setSelectedReceipt] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [bottlesProduced, setBottlesProduced] = useState("");
+  const [batchNotes, setBatchNotes] = useState("");
+
+  const [submittingReceipt, setSubmittingReceipt] = useState(false);
+  const [submittingBatch, setSubmittingBatch] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
+
     try {
-      setLoading(true);
-      setError("");
+      const [receiptResponse, batchResponse, productResponse] =
+        await Promise.all([
+          api.get("water-receipts/"),
+          api.get("bottling-batches/"),
+          api.get("products/"),
+        ]);
 
-      const [receiptResponse, productResponse] = await Promise.all([
-        api.get("supplier-receipts/"),
-        api.get("products/"),
-      ]);
-
-      const receiptData = receiptResponse.data;
-      const productData = productResponse.data;
-
-      setReceipts(
-        Array.isArray(receiptData)
-          ? receiptData
-          : receiptData.results || []
+      setReceipts(extractList<WaterReceipt>(receiptResponse.data));
+      setBatches(extractList<BottlingBatch>(batchResponse.data));
+      setProducts(
+        extractList<Product>(productResponse.data).filter(
+          (product) => product.is_active
+        )
       );
-
-      const productList = Array.isArray(productData)
-        ? productData
-        : productData.results || [];
-
-      setProducts(productList.filter((p: Product) => p.is_active));
-    } catch (err) {
+    } catch (err: any) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     loadData();
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const handleReceiptSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (Number(litresReceived) <= 0) {
+      setError("Enter a valid water quantity.");
+      return;
+    }
+
+    setSubmittingReceipt(true);
 
     try {
-      setSaving(true);
-      setError("");
-      setSuccess("");
-
-      await api.post("supplier-receipts/", {
-        ...form,
-        product: Number(form.product),
-        quantity_received: Number(form.quantity_received),
+      await api.post("water-receipts/", {
+        received_date: receiptDate,
+        quantity_received_litres: Number(litresReceived),
+        notes: receiptNotes,
       });
 
-      setSuccess("Supplier receipt recorded successfully.");
-
-      setForm({
-        supplier_name: "",
-        delivery_reference: "",
-        product: "",
-        received_date: new Date().toISOString().slice(0, 10),
-        quantity_received: "",
-        notes: "",
-      });
-
+      setSuccess("Water receipt recorded successfully.");
+      setLitresReceived("");
+      setReceiptNotes("");
       await loadData();
-    } catch (err) {
+    } catch (err: any) {
       setError(errorMessage(err));
     } finally {
-      setSaving(false);
+      setSubmittingReceipt(false);
     }
+  };
+
+  const handleBatchSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!selectedReceipt || !selectedProduct) {
+      setError("Select a water receipt and a product.");
+      return;
+    }
+
+    if (Number(bottlesProduced) <= 0) {
+      setError("Enter a valid number of bottles.");
+      return;
+    }
+
+    setSubmittingBatch(true);
+
+    try {
+      await api.post("bottling-batches/", {
+        water_receipt: Number(selectedReceipt),
+        product: Number(selectedProduct),
+        bottles_produced: Number(bottlesProduced),
+        notes: batchNotes,
+      });
+
+      setSuccess("Bottling batch recorded successfully.");
+      setBottlesProduced("");
+      setBatchNotes("");
+      await loadData();
+    } catch (err: any) {
+      setError(errorMessage(err));
+    } finally {
+      setSubmittingBatch(false);
+    }
+  };
+
+  const totalLitresReceived = receipts.reduce(
+    (sum, receipt) =>
+      sum + Number(receipt.quantity_received_litres || 0),
+    0
+  );
+
+  const totalBottlesProduced = batches.reduce(
+    (sum, batch) =>
+      sum + Number(batch.bottles_produced || 0),
+    0
+  );
+
+  if (loading) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border text-primary" />
+        <p className="text-secondary mt-3">
+          Loading water operations...
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div className="container-fluid py-3">
-      <div className="mb-4">
-        <h3 className="fw-bold">Supplier Receipts</h3>
-        <p className="text-muted">
-          Record finished bottled water received from external suppliers.
-        </p>
+    <div>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+          <h2 className="fw-bold mb-1">
+            Water Receipts & Bottling
+          </h2>
+          <p className="text-secondary mb-0">
+            Record raw water supplies and finished bottled products.
+          </p>
+        </div>
+
+        <button
+          className="btn btn-outline-primary btn-sm"
+          onClick={loadData}
+        >
+          <RefreshCw size={15} className="me-2" />
+          Refresh
+        </button>
       </div>
 
-      {error && <div className="alert alert-danger">{error}</div>}
-      {success && <div className="alert alert-success">{success}</div>}
+      {error && (
+        <div className="alert alert-danger alert-dismissible">
+          {error}
+          <button
+            className="btn-close"
+            onClick={() => setError("")}
+            aria-label="Dismiss"
+          />
+        </div>
+      )}
+
+      {success && (
+        <div className="alert alert-success alert-dismissible">
+          {success}
+          <button
+            className="btn-close"
+            onClick={() => setSuccess("")}
+            aria-label="Dismiss"
+          />
+        </div>
+      )}
+
+      <div className="row g-3 mb-4">
+        <div className="col-12 col-md-6">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body p-4">
+              <div className="d-flex align-items-center gap-3">
+                <div className="bg-primary bg-opacity-10 text-primary rounded-3 p-3">
+                  <Droplets size={24} />
+                </div>
+                <div>
+                  <div className="text-secondary small">
+                    Total Water Received
+                  </div>
+                  <h4 className="fw-bold mb-0">
+                    {formatNumber(totalLitresReceived)} L
+                  </h4>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 col-md-6">
+          <div className="card border-0 shadow-sm">
+            <div className="card-body p-4">
+              <div className="d-flex align-items-center gap-3">
+                <div className="bg-success bg-opacity-10 text-success rounded-3 p-3">
+                  <Factory size={24} />
+                </div>
+                <div>
+                  <div className="text-secondary small">
+                    Total Bottles Produced
+                  </div>
+                  <h4 className="fw-bold mb-0">
+                    {formatNumber(totalBottlesProduced)}
+                  </h4>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="card border-0 shadow-sm mb-4">
-        <div className="card-header bg-white py-3">
-          <h5 className="mb-0 fw-semibold">Record Supplier Receipt</h5>
+        <div className="card-header bg-white p-3">
+          <ul className="nav nav-pills gap-2">
+            <li className="nav-item">
+              <button
+                className={`nav-link ${
+                  activeTab === "receipts" ? "active" : ""
+                }`}
+                onClick={() => setActiveTab("receipts")}
+              >
+                <Droplets size={16} className="me-2" />
+                Water Receipts
+              </button>
+            </li>
+            <li className="nav-item">
+              <button
+                className={`nav-link ${
+                  activeTab === "bottling" ? "active" : ""
+                }`}
+                onClick={() => setActiveTab("bottling")}
+              >
+                <Factory size={16} className="me-2" />
+                Bottling Batches
+              </button>
+            </li>
+          </ul>
         </div>
 
-        <div className="card-body">
-          <form onSubmit={handleSubmit}>
-            <div className="row g-3">
-              <div className="col-md-6">
-                <label className="form-label">Supplier Name</label>
-                <input
-                  className="form-control"
-                  value={form.supplier_name}
-                  onChange={(e) =>
-                    setForm({ ...form, supplier_name: e.target.value })
-                  }
-                  required
-                />
+        <div className="card-body p-4">
+          {activeTab === "receipts" && (
+            <>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 className="fw-bold mb-0">
+                  Nairobi Water Receipts
+                </h5>
               </div>
 
-              <div className="col-md-6">
-                <label className="form-label">Delivery Reference</label>
-                <input
-                  className="form-control"
-                  value={form.delivery_reference}
-                  onChange={(e) =>
-                    setForm({ ...form, delivery_reference: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="col-md-4">
-                <label className="form-label">Product</label>
-                <select
-                  className="form-select"
-                  value={form.product}
-                  onChange={(e) =>
-                    setForm({ ...form, product: e.target.value })
-                  }
-                  required
+              {canCreate && (
+                <form
+                  onSubmit={handleReceiptSubmit}
+                  className="row g-3 mb-4 p-3 bg-light rounded-3"
                 >
-                  <option value="">Select product</option>
-                  {products.map((product) => (
-                    <option
-                      key={product.product_id}
-                      value={product.product_id}
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">
+                      Receipt Date
+                    </label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={receiptDate}
+                      onChange={(event) =>
+                        setReceiptDate(event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">
+                      Quantity Received (Litres)
+                    </label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      className="form-control"
+                      value={litresReceived}
+                      onChange={(event) =>
+                        setLitresReceived(event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">
+                      Supplier
+                    </label>
+                    <input
+                      className="form-control"
+                      value="Nairobi Water"
+                      disabled
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label">
+                      Notes
+                    </label>
+                    <textarea
+                      className="form-control"
+                      rows={2}
+                      value={receiptNotes}
+                      onChange={(event) =>
+                        setReceiptNotes(event.target.value)
+                      }
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={submittingReceipt}
                     >
-                      {product.product_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                      <Plus size={16} className="me-2" />
+                      {submittingReceipt
+                        ? "Recording..."
+                        : "Record Water Receipt"}
+                    </button>
+                  </div>
+                </form>
+              )}
 
-              <div className="col-md-4">
-                <label className="form-label">Received Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={form.received_date}
-                  onChange={(e) =>
-                    setForm({ ...form, received_date: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="col-md-4">
-                <label className="form-label">Quantity Received</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="form-control"
-                  value={form.quantity_received}
-                  onChange={(e) =>
-                    setForm({ ...form, quantity_received: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              <div className="col-12">
-                <label className="form-label">Notes</label>
-                <textarea
-                  className="form-control"
-                  rows={2}
-                  value={form.notes}
-                  onChange={(e) =>
-                    setForm({ ...form, notes: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary mt-4"
-              disabled={saving}
-            >
-              {saving ? "Recording..." : "Record Receipt"}
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white py-3 d-flex justify-content-between">
-          <h5 className="mb-0 fw-semibold">Receipt History</h5>
-          <button
-            className="btn btn-sm btn-outline-primary"
-            onClick={loadData}
-          >
-            <i className="bi bi-arrow-clockwise me-1" />
-            Refresh
-          </button>
-        </div>
-
-        <div className="card-body">
-          {loading ? (
-            <p className="text-muted">Loading receipts...</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-hover align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th>Receipt ID</th>
-                    <th>Supplier</th>
-                    <th>Reference</th>
-                    <th>Product</th>
-                    <th>Quantity</th>
-                    <th>Received Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {receipts.map((receipt) => (
-                    <tr key={receipt.receipt_id}>
-                      <td>#{receipt.receipt_id}</td>
-                      <td>{receipt.supplier_name}</td>
-                      <td>{receipt.delivery_reference}</td>
-                      <td>{receipt.product_name}</td>
-                      <td>{Number(receipt.quantity_received).toLocaleString()}</td>
-                      <td>{receipt.received_date}</td>
-                    </tr>
-                  ))}
-
-                  {receipts.length === 0 && (
+              <div className="table-responsive">
+                <table className="table table-hover align-middle">
+                  <thead className="table-light">
                     <tr>
-                      <td colSpan={6} className="text-center text-muted py-4">
-                        No supplier receipts recorded yet.
-                      </td>
+                      <th>Reference</th>
+                      <th>Supplier</th>
+                      <th>Date</th>
+                      <th>Quantity Received</th>
+                      <th>Notes</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {receipts.map((receipt) => (
+                      <tr key={receipt.receipt_id}>
+                        <td className="fw-semibold">
+                          {receipt.reference || `#${receipt.receipt_id}`}
+                        </td>
+                        <td>{receipt.supplier_name}</td>
+                        <td>{receipt.received_date}</td>
+                        <td>
+                          {formatNumber(
+                            receipt.quantity_received_litres
+                          )} L
+                        </td>
+                        <td>{receipt.notes || "—"}</td>
+                      </tr>
+                    ))}
+
+                    {receipts.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="text-center text-secondary py-4">
+                          No water receipts recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {activeTab === "bottling" && (
+            <>
+              <h5 className="fw-bold mb-3">Bottling Batches</h5>
+
+              {canCreate && (
+                <form
+                  onSubmit={handleBatchSubmit}
+                  className="row g-3 mb-4 p-3 bg-light rounded-3"
+                >
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">
+                      Water Receipt
+                    </label>
+                    <select
+                      className="form-select"
+                      value={selectedReceipt}
+                      onChange={(event) =>
+                        setSelectedReceipt(event.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select water receipt</option>
+                      {receipts.map((receipt) => (
+                        <option
+                          key={receipt.receipt_id}
+                          value={receipt.receipt_id}
+                        >
+                          {receipt.reference} — {receipt.received_date}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">
+                      Finished Product
+                    </label>
+                    <select
+                      className="form-select"
+                      value={selectedProduct}
+                      onChange={(event) =>
+                        setSelectedProduct(event.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Select product</option>
+                      {products.map((product) => (
+                        <option
+                          key={product.product_id}
+                          value={product.product_id}
+                        >
+                          {product.product_name} ({product.unit_size_ml} ml)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label">
+                      Bottles Produced
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      className="form-control"
+                      value={bottlesProduced}
+                      onChange={(event) =>
+                        setBottlesProduced(event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label">Notes</label>
+                    <textarea
+                      className="form-control"
+                      rows={2}
+                      value={batchNotes}
+                      onChange={(event) =>
+                        setBatchNotes(event.target.value)
+                      }
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={
+                        submittingBatch ||
+                        receipts.length === 0 ||
+                        products.length === 0
+                      }
+                    >
+                      <Plus size={16} className="me-2" />
+                      {submittingBatch
+                        ? "Recording..."
+                        : "Record Bottling Batch"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="table-responsive">
+                <table className="table table-hover align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Batch</th>
+                      <th>Product</th>
+                      <th>Water Receipt</th>
+                      <th>Bottles</th>
+                      <th>Finished Water</th>
+                      <th>Water Used</th>
+                      <th>Water Loss</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batches.map((batch) => (
+                      <tr key={batch.bottling_batch_id}>
+                        <td className="fw-semibold">
+                          {batch.batch_number || `#${batch.bottling_batch_id}`}
+                        </td>
+                        <td>{batch.product_name || batch.product}</td>
+                        <td>
+                          {batch.water_receipt_reference ||
+                            batch.water_receipt}
+                        </td>
+                        <td>{formatNumber(batch.bottles_produced)}</td>
+                        <td>
+                          {formatNumber(batch.finished_water_litres)} L
+                        </td>
+                        <td>
+                          {formatNumber(batch.water_used_litres)} L
+                        </td>
+                        <td>
+                          {formatNumber(batch.water_loss_litres)} L
+                        </td>
+                      </tr>
+                    ))}
+
+                    {batches.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="text-center text-secondary py-4">
+                          No bottling batches recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

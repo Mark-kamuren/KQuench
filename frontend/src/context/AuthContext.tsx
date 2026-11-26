@@ -1,5 +1,7 @@
+
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -8,108 +10,122 @@ import {
 
 import api from "../services/api";
 
-export type User = {
+export interface User {
   id: number;
   username: string;
   email: string;
   role: string;
   is_active: boolean;
   date_joined: string;
-};
+}
 
-type AuthContextType = {
+interface TokenResponse {
+  access: string;
+  refresh: string;
+}
+
+interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-};
-
-type TokenResponse = {
-  access: string;
-  refresh: string;
-};
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-async function fetchCurrentUser(token: string): Promise<User> {
-  const response = await api.get<User>("users/me/", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  return response.data;
+  refreshUser: () => Promise<void>;
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function login(username: string, password: string) {
-    const response = await api.post<TokenResponse>("token/", {
-      username,
-      password,
-    });
-
-    const { access, refresh } = response.data;
-
-    localStorage.setItem("access_token", access);
-    localStorage.setItem("refresh_token", refresh);
-
-    try {
-      const currentUser = await fetchCurrentUser(access);
-      setUser(currentUser);
-    } catch (error) {
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      setUser(null);
-      throw error;
-    }
-  }
-
-  function logout() {
+  const clearSession = useCallback(() => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     setUser(null);
-  }
+  }, []);
+
+  const fetchCurrentUser = useCallback(async () => {
+    const response = await api.get<User>("users/me/");
+    setUser(response.data);
+    return response.data;
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    await fetchCurrentUser();
+  }, [fetchCurrentUser]);
+
+  const login = useCallback(
+    async (username: string, password: string) => {
+      const response = await api.post<TokenResponse>(
+        "token/",
+        {
+          username,
+          password,
+        }
+      );
+
+      localStorage.setItem(
+        "access_token",
+        response.data.access
+      );
+
+      localStorage.setItem(
+        "refresh_token",
+        response.data.refresh
+      );
+
+      try {
+        await fetchCurrentUser();
+      } catch (error) {
+        clearSession();
+        throw error;
+      }
+    },
+    [fetchCurrentUser, clearSession]
+  );
+
+  const logout = useCallback(() => {
+    clearSession();
+    window.location.assign("/login");
+  }, [clearSession]);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
-    async function initializeAuth() {
-      const token = localStorage.getItem("access_token");
+    const initializeSession = async () => {
+      const accessToken = localStorage.getItem("access_token");
+      const refreshToken = localStorage.getItem("refresh_token");
 
-      if (!token) {
-        if (mounted) setLoading(false);
+      if (!accessToken && !refreshToken) {
+        if (active) {
+          setLoading(false);
+        }
         return;
       }
 
       try {
-        const currentUser = await fetchCurrentUser(token);
-
-        if (mounted) {
-          setUser(currentUser);
-        }
+        await fetchCurrentUser();
       } catch {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-
-        if (mounted) {
-          setUser(null);
-        }
+        clearSession();
       } finally {
-        if (mounted) {
+        if (active) {
           setLoading(false);
         }
       }
-    }
+    };
 
-    initializeAuth();
+    initializeSession();
 
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, []);
+  }, [fetchCurrentUser, clearSession]);
 
   return (
     <AuthContext.Provider
@@ -118,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         login,
         logout,
+        refreshUser,
       }}
     >
       {children}
@@ -125,11 +142,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
 
   if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
+    throw new Error(
+      "useAuth must be used inside an AuthProvider"
+    );
   }
 
   return context;

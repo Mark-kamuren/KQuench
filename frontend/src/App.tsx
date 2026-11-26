@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import { useState, type FormEvent, type ReactNode } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -12,32 +13,31 @@ import {
 import {
   LayoutDashboard,
   Package,
-  ClipboardList,
   Warehouse,
   ShoppingCart,
   Truck,
-  BrainCircuit,
-  Users as UsersIcon,
+  ChartNoAxesCombined,
+  Users,
   LogOut,
   Menu,
   X,
-  UserCircle,
+  Droplets,
 } from "lucide-react";
 
 import { useAuth } from "./context/AuthContext";
 
-import Products from "./pages/Products";
 import Dashboard from "./pages/Dashboard";
+import Products from "./pages/Products";
 import SupplierReceipts from "./pages/SupplierReceipts";
 import Inventory from "./pages/Inventory";
 import Sales from "./pages/Sales";
 import Distribution from "./pages/Distribution";
-import Users from "./pages/Users";
 import Predictions from "./pages/Predictions";
+import UsersPage from "./pages/Users";
 
 import "./App.css";
 
-type UserRole =
+type Role =
   | "ADMIN"
   | "PRODUCTION_MANAGER"
   | "INVENTORY_MANAGER"
@@ -47,11 +47,11 @@ type UserRole =
 interface NavigationItem {
   label: string;
   path: string;
-  icon: React.ReactNode;
-  roles: UserRole[];
+  icon: ReactNode;
+  roles: Role[];
 }
 
-const allRoles: UserRole[] = [
+const ALL_ROLES: Role[] = [
   "ADMIN",
   "PRODUCTION_MANAGER",
   "INVENTORY_MANAGER",
@@ -62,7 +62,7 @@ const allRoles: UserRole[] = [
 const navigation: NavigationItem[] = [
   {
     label: "Dashboard",
-    path: "/",
+    path: "/dashboard",
     icon: <LayoutDashboard size={19} />,
     roles: ["ADMIN"],
   },
@@ -70,19 +70,19 @@ const navigation: NavigationItem[] = [
     label: "Products",
     path: "/products",
     icon: <Package size={19} />,
-    roles: allRoles,
+    roles: ALL_ROLES,
   },
   {
-    label: "Supplier Receipts",
-    path: "/supplier-receipts",
-    icon: <ClipboardList size={19} />,
+    label: "Water Receipts & Bottling",
+    path: "/receipts",
+    icon: <Droplets size={19} />,
     roles: ["ADMIN", "PRODUCTION_MANAGER", "INVENTORY_MANAGER"],
   },
   {
     label: "Inventory",
     path: "/inventory",
     icon: <Warehouse size={19} />,
-    roles: allRoles,
+    roles: ALL_ROLES,
   },
   {
     label: "Sales",
@@ -99,129 +99,28 @@ const navigation: NavigationItem[] = [
   {
     label: "Predictions",
     path: "/predictions",
-    icon: <BrainCircuit size={19} />,
-    roles: allRoles,
+    icon: <ChartNoAxesCombined size={19} />,
+    roles: ALL_ROLES,
   },
   {
     label: "User Management",
     path: "/users",
-    icon: <UsersIcon size={19} />,
+    icon: <Users size={19} />,
     roles: ["ADMIN"],
   },
 ];
 
-function getRoleLabel(role: string) {
-  return role
-    .split("_")
-    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function LoadingScreen() {
-  return (
-    <div className="min-vh-100 d-flex justify-content-center align-items-center">
-      <div className="text-center">
-        <div className="spinner-border text-primary mb-3" />
-        <p className="text-muted">Loading KQuench...</p>
-      </div>
-    </div>
-  );
-}
-
-function LoginPage() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleSubmit(
-    event: React.FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
-
-    setError("");
-    setSubmitting(true);
-
-    try {
-      await login(username, password);
-      navigate("/", { replace: true });
-    } catch (err: any) {
-      const data = err?.response?.data;
-
-      setError(
-        data?.detail ||
-          data?.non_field_errors?.[0] ||
-          "Login failed. Please check your credentials."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="container-fluid min-vh-100 d-flex align-items-center justify-content-center bg-light">
-      <div
-        className="card border-0 shadow-sm"
-        style={{ width: "100%", maxWidth: 420 }}
-      >
-        <div className="card-body p-4 p-md-5">
-          <div className="text-center mb-4">
-            <h2 className="fw-bold text-primary">KQuench</h2>
-            <p className="text-muted">
-              Water Operations Management System
-            </p>
-          </div>
-
-          {error && (
-            <div className="alert alert-danger">{error}</div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="form-label">Username</label>
-              <input
-                type="text"
-                className="form-control"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                required
-              />
-            </div>
-
-            <div className="mb-4">
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-control"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary w-100"
-              disabled={submitting}
-            >
-              {submitting ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ProtectedRoute() {
   const { user, loading } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <div className="spinner-border text-primary" />
+        <p>Loading KQuench...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -231,11 +130,11 @@ function ProtectedRoute() {
 }
 
 function RoleRoute({
-  allowedRoles,
+  roles,
   children,
 }: {
-  allowedRoles: UserRole[];
-  children: React.ReactNode;
+  roles: Role[];
+  children: ReactNode;
 }) {
   const { user } = useAuth();
 
@@ -243,7 +142,7 @@ function RoleRoute({
     return <Navigate to="/login" replace />;
   }
 
-  if (!allowedRoles.includes(user.role as UserRole)) {
+  if (!roles.includes(user.role as Role)) {
     return <Navigate to="/products" replace />;
   }
 
@@ -253,92 +152,185 @@ function RoleRoute({
 function HomeRedirect() {
   const { user } = useAuth();
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user.role === "ADMIN") {
-    return <Dashboard />;
-  }
-
-  return <Navigate to="/products" replace />;
+  return (
+    <Navigate
+      to={user?.role === "ADMIN" ? "/dashboard" : "/products"}
+      replace
+    />
+  );
 }
 
-function ProductsAccess() {
-  const { user } = useAuth();
+function Login() {
+  const { login, user, loading } = useAuth();
+  const navigate = useNavigate();
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!loading && user) {
+    return <HomeRedirect />;
   }
 
-  return <Products role={user.role} />;
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+
+    try {
+      await login(username.trim(), password);
+      navigate("/", { replace: true });
+    } catch (err: any) {
+      const data = err?.response?.data;
+
+      setError(
+        data?.detail ||
+          data?.non_field_errors?.[0] ||
+          data?.username?.[0] ||
+          "Unable to sign in. Check your username and password."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="login-brand">
+          <div className="brand-icon">
+            <Droplets size={30} />
+          </div>
+
+          <h1>KQuench</h1>
+          <p>Water Operations Management System</p>
+        </div>
+
+        <h2>Welcome back</h2>
+
+        <p className="login-subtitle">
+          Sign in to access your workspace.
+        </p>
+
+        {error && (
+          <div className="alert alert-danger" role="alert">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="mb-3">
+            <label className="form-label" htmlFor="username">
+              Username
+            </label>
+
+            <input
+              id="username"
+              type="text"
+              className="form-control"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              required
+              disabled={submitting}
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="form-label" htmlFor="password">
+              Password
+            </label>
+
+            <input
+              id="password"
+              type="password"
+              className="form-control"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+              disabled={submitting}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-primary w-100 login-button"
+            disabled={submitting || !username.trim() || !password}
+          >
+            {submitting ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" />
+                Signing in...
+              </>
+            ) : (
+              "Sign In"
+            )}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function MainLayout() {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
   const visibleNavigation = navigation.filter((item) =>
-    item.roles.includes(user.role as UserRole)
+    item.roles.includes(user?.role as Role)
   );
 
   return (
-    <div className="d-flex min-vh-100 bg-light">
+    <div className="kquench-layout">
       {sidebarOpen && (
-        <div
-          className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-lg-none"
-          style={{ zIndex: 1030 }}
+        <button
+          type="button"
+          className="sidebar-overlay"
+          aria-label="Close navigation"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       <aside
-        className={`bg-dark text-white d-flex flex-column ${
+        className={`kquench-sidebar ${
           sidebarOpen ? "kquench-sidebar-open" : ""
         }`}
-        style={{
-          width: 255,
-          minWidth: 255,
-          zIndex: 1040,
-        }}
       >
-        <div className="px-4 py-4 border-bottom border-secondary d-flex justify-content-between align-items-center">
+        <div className="sidebar-brand">
+          <div className="brand-icon">
+            <Droplets size={25} />
+          </div>
+
           <div>
-            <h4 className="fw-bold mb-0">KQuench</h4>
-            <small className="text-white-50">
-              Operations System
-            </small>
+            <h4>KQuench</h4>
+            <span>Water Management</span>
           </div>
 
           <button
-            className="btn btn-sm btn-outline-light d-lg-none"
+            type="button"
+            className="sidebar-close"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        <nav className="flex-grow-1 p-3">
-          <small className="text-white-50 px-2 d-block mb-3">
-            MAIN MENU
-          </small>
+        <div className="sidebar-section-label">
+          MAIN MENU
+        </div>
 
+        <nav className="sidebar-navigation">
           {visibleNavigation.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
-              end={item.path === "/"}
+              end
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `d-flex align-items-center gap-3 text-decoration-none rounded px-3 py-3 mb-1 ${
-                  isActive
-                    ? "bg-primary text-white"
-                    : "text-white-50"
-                }`
+                `sidebar-link ${isActive ? "active" : ""}`
               }
             >
               {item.icon}
@@ -347,145 +339,174 @@ function MainLayout() {
           ))}
         </nav>
 
-        <div className="p-3 border-top border-secondary">
-          <div className="d-flex align-items-center gap-2 mb-3">
-            <UserCircle size={28} />
+        <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <div className="user-avatar">
+              {(user?.username || "U").charAt(0).toUpperCase()}
+            </div>
 
-            <div className="overflow-hidden">
-              <div className="fw-semibold text-truncate">
-                {user.username}
-              </div>
-
-              <small className="text-white-50">
-                {getRoleLabel(user.role)}
-              </small>
+            <div className="user-details">
+              <strong>{user?.username}</strong>
+              <span>
+                {user?.role?.replaceAll("_", " ")}
+              </span>
             </div>
           </div>
 
           <button
-            className="btn btn-outline-light w-100 d-flex align-items-center justify-content-center gap-2"
+            type="button"
+            className="logout-button"
             onClick={logout}
           >
-            <LogOut size={17} />
-            Logout
+            <LogOut size={18} />
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
-      <div className="flex-grow-1 min-vh-100 overflow-hidden">
-        <header className="bg-white border-bottom px-3 px-md-4 py-3 d-flex justify-content-between align-items-center">
+      <main className="kquench-main">
+        <header className="kquench-topbar">
           <button
-            className="btn btn-outline-secondary d-lg-none"
+            type="button"
+            className="mobile-menu-button"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation"
           >
-            <Menu size={20} />
+            <Menu size={23} />
           </button>
 
-          <div className="d-none d-lg-block fw-semibold">
-            KQuench Management
+          <div className="topbar-heading">
+            <strong>KQuench Operations</strong>
+            <span>
+              Water production, inventory and distribution
+            </span>
           </div>
 
-          <div className="d-flex align-items-center gap-2">
-            <UserCircle size={20} className="text-secondary" />
-            <span className="small fw-semibold">
-              {user.username}
-            </span>
+          <div className="topbar-account">
+            <span>{user?.username}</span>
           </div>
         </header>
 
-        <main className="p-3 p-md-4">
+        <div className="page-container">
           <Outlet />
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
+  );
+}
+
+function AppRoutes() {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<HomeRedirect />} />
+
+          <Route
+            path="/dashboard"
+            element={
+              <RoleRoute roles={["ADMIN"]}>
+                <Dashboard />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/products"
+            element={
+              <RoleRoute roles={ALL_ROLES}>
+                <Products role={user?.role || ""} />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/receipts"
+            element={
+              <RoleRoute
+                roles={[
+                  "ADMIN",
+                  "PRODUCTION_MANAGER",
+                  "INVENTORY_MANAGER",
+                ]}
+              >
+                <SupplierReceipts />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/inventory"
+            element={
+              <RoleRoute roles={ALL_ROLES}>
+                <Inventory />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/sales"
+            element={
+              <RoleRoute
+                roles={[
+                  "ADMIN",
+                  "SALES_OFFICER",
+                  "DISTRIBUTION_OFFICER",
+                ]}
+              >
+                <Sales />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/distribution"
+            element={
+              <RoleRoute
+                roles={["ADMIN", "DISTRIBUTION_OFFICER"]}
+              >
+                <Distribution />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/predictions"
+            element={
+              <RoleRoute roles={ALL_ROLES}>
+                <Predictions />
+              </RoleRoute>
+            }
+          />
+
+          <Route
+            path="/users"
+            element={
+              <RoleRoute roles={["ADMIN"]}>
+                <UsersPage />
+              </RoleRoute>
+            }
+          />
+        </Route>
+      </Route>
+
+      <Route
+        path="*"
+        element={<Navigate to="/" replace />}
+      />
+    </Routes>
   );
 }
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-
-        <Route element={<ProtectedRoute />}>
-          <Route element={<MainLayout />}>
-            <Route index element={<HomeRedirect />} />
-
-            <Route
-              path="products"
-              element={<ProductsAccess />}
-            />
-
-            <Route
-              path="supplier-receipts"
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    "ADMIN",
-                    "PRODUCTION_MANAGER",
-                    "INVENTORY_MANAGER",
-                  ]}
-                >
-                  <SupplierReceipts />
-                </RoleRoute>
-              }
-            />
-
-            <Route
-              path="inventory"
-              element={<Inventory />}
-            />
-
-            <Route
-              path="sales"
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    "ADMIN",
-                    "SALES_OFFICER",
-                    "DISTRIBUTION_OFFICER",
-                  ]}
-                >
-                  <Sales />
-                </RoleRoute>
-              }
-            />
-
-            <Route
-              path="distribution"
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    "ADMIN",
-                    "DISTRIBUTION_OFFICER",
-                  ]}
-                >
-                  <Distribution />
-                </RoleRoute>
-              }
-            />
-
-            <Route  
-              path="predictions"
-              element={<Predictions />}
-            />
-
-            <Route
-              path="users"
-              element={
-                <RoleRoute allowedRoles={["ADMIN"]}>
-                  <Users />
-                </RoleRoute>
-              }
-            />
-
-            <Route
-              path="*"
-              element={<Navigate to="/" replace />}
-            />
-          </Route>
-        </Route>
-      </Routes>
+      <AppRoutes />
     </BrowserRouter>
   );
 }
+

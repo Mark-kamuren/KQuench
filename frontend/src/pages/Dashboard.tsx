@@ -1,6 +1,17 @@
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import {
+  Droplets,
+  Package,
+  Warehouse,
+  ShoppingCart,
+  Truck,
+  Banknote,
+  Factory,
+  ClipboardList,
+  RefreshCw,
+} from "lucide-react";
+
 import api from "../services/api";
 
 interface DashboardData {
@@ -8,6 +19,10 @@ interface DashboardData {
   total_stock: number;
   total_supplier_receipts: number;
   total_units_received: number;
+  total_water_received_litres: number;
+  total_water_used_litres: number;
+  total_water_loss_litres: number;
+  total_bottles_produced: number;
   total_sales: number;
   total_revenue: number;
   pending_sales: number;
@@ -16,12 +31,6 @@ interface DashboardData {
   total_external_deliveries: number;
   completed_internal_deliveries: number;
   completed_external_deliveries: number;
-  low_stock_products: {
-    product_id: number;
-    product_name: string;
-    quantity_available: number;
-    reorder_level: number;
-  }[];
 }
 
 const initialData: DashboardData = {
@@ -29,6 +38,10 @@ const initialData: DashboardData = {
   total_stock: 0,
   total_supplier_receipts: 0,
   total_units_received: 0,
+  total_water_received_litres: 0,
+  total_water_used_litres: 0,
+  total_water_loss_litres: 0,
+  total_bottles_produced: 0,
   total_sales: 0,
   total_revenue: 0,
   pending_sales: 0,
@@ -37,237 +50,267 @@ const initialData: DashboardData = {
   total_external_deliveries: 0,
   completed_internal_deliveries: 0,
   completed_external_deliveries: 0,
-  low_stock_products: [],
 };
+
+function formatNumber(value: number | undefined): string {
+  return Number(value || 0).toLocaleString("en-KE");
+}
+
+function formatCurrency(value: number | undefined): string {
+  return `KSh ${Number(value || 0).toLocaleString("en-KE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function StatCard({
+  title,
+  value,
+  description,
+  icon,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="col-12 col-sm-6 col-xl-3">
+      <div className="card border-0 shadow-sm h-100">
+        <div className="card-body p-4">
+          <div className="d-flex justify-content-between align-items-start">
+            <div>
+              <p className="text-secondary small mb-2">{title}</p>
+              <h3 className="fw-bold mb-2">{value}</h3>
+              <p className="text-secondary small mb-0">{description}</p>
+            </div>
+            <div className="rounded-3 bg-primary bg-opacity-10 text-primary p-3">
+              {icon}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData>(initialData);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function loadDashboard() {
-    try {
-      setLoading(true);
-      setError("");
+  const loadDashboard = async () => {
+    setLoading(true);
+    setError("");
 
+    try {
       const response = await api.get("dashboard/");
-      setData({ ...initialData, ...response.data });
+      setData({
+        ...initialData,
+        ...response.data,
+      });
     } catch (err: any) {
       setError(
         err?.response?.data?.detail ||
-        "Unable to load dashboard information."
+          "Unable to load dashboard information."
       );
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     loadDashboard();
   }, []);
 
-  const formatNumber = (value: number) =>
-    Number(value || 0).toLocaleString("en-KE");
-
-  const formatCurrency = (value: number) =>
-    `KES ${Number(value || 0).toLocaleString("en-KE", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-
-  const cards = [
-    {
-      title: "Total Products",
-      value: formatNumber(data.total_products),
-      icon: "bi-box-seam",
-      color: "primary",
-      link: "/products",
-    },
-    {
-      title: "Available Stock",
-      value: formatNumber(data.total_stock),
-      icon: "bi-boxes",
-      color: "success",
-      link: "/inventory",
-    },
-    {
-      title: "Supplier Receipts",
-      value: formatNumber(data.total_supplier_receipts),
-      icon: "bi-truck",
-      color: "info",
-      link: "/supplier-receipts",
-    },
-    {
-      title: "Units Received",
-      value: formatNumber(data.total_units_received),
-      icon: "bi-box-arrow-in-down",
-      color: "success",
-      link: "/supplier-receipts",
-    },
-    {
-      title: "Total Sales",
-      value: formatNumber(data.total_sales),
-      icon: "bi-cart-check",
-      color: "warning",
-      link: "/sales",
-    },
-    {
-      title: "Sales Revenue",
-      value: formatCurrency(data.total_revenue),
-      icon: "bi-currency-exchange",
-      color: "primary",
-      link: "/sales",
-    },
-  ];
-
   if (loading) {
     return (
       <div className="text-center py-5">
         <div className="spinner-border text-primary" />
-        <p className="text-muted mt-2">Loading dashboard...</p>
+        <p className="text-secondary mt-3">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="alert alert-danger">
+        <div className="d-flex justify-content-between align-items-center">
+          <span>{error}</span>
+          <button
+            className="btn btn-sm btn-outline-danger"
+            onClick={loadDashboard}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container-fluid py-3">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
-          <h3 className="fw-bold mb-1">Dashboard</h3>
-          <p className="text-muted mb-0">
-            Overview of KQuench operations.
+          <h2 className="fw-bold mb-1">Dashboard</h2>
+          <p className="text-secondary mb-0">
+            Overview of KQuench water operations.
           </p>
         </div>
 
         <button
-          className="btn btn-outline-primary"
+          className="btn btn-outline-primary btn-sm"
           onClick={loadDashboard}
         >
-          <i className="bi bi-arrow-clockwise me-2" />
+          <RefreshCw size={15} className="me-2" />
           Refresh
         </button>
       </div>
 
-      {error && (
-        <div className="alert alert-danger">{error}</div>
-      )}
+      <h6 className="text-secondary fw-bold mb-3">
+        INVENTORY AND PRODUCTION
+      </h6>
 
       <div className="row g-3 mb-4">
-        {cards.map((card) => (
-          <div className="col-sm-6 col-xl-4" key={card.title}>
-            <Link
-              to={card.link}
-              className="text-decoration-none"
-            >
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body d-flex justify-content-between align-items-center">
-                  <div>
-                    <p className="text-muted mb-2">
-                      {card.title}
-                    </p>
-                    <h3 className="fw-bold text-dark mb-0">
-                      {card.value}
-                    </h3>
-                  </div>
+        <StatCard
+          title="Active Products"
+          value={formatNumber(data.total_products)}
+          description="Registered products"
+          icon={<Package size={22} />}
+        />
 
-                  <div
-                    className={`rounded-circle bg-${card.color}-subtle text-${card.color} p-3`}
-                  >
-                    <i className={`bi ${card.icon} fs-4`} />
-                  </div>
-                </div>
+        <StatCard
+          title="Available Stock"
+          value={formatNumber(data.total_stock)}
+          description="Finished bottles available"
+          icon={<Warehouse size={22} />}
+        />
+
+        <StatCard
+          title="Water Received"
+          value={`${formatNumber(data.total_water_received_litres)} L`}
+          description="Nairobi Water supply"
+          icon={<Droplets size={22} />}
+        />
+
+        <StatCard
+          title="Bottles Produced"
+          value={formatNumber(data.total_bottles_produced ?? data.total_units_received)}
+          description="Finished bottled products"
+          icon={<Factory size={22} />}
+        />
+      </div>
+
+      <h6 className="text-secondary fw-bold mb-3">
+        SALES AND REVENUE
+      </h6>
+
+      <div className="row g-3 mb-4">
+        <StatCard
+          title="Total Sales"
+          value={formatNumber(data.total_sales)}
+          description="Non-cancelled sales"
+          icon={<ShoppingCart size={22} />}
+        />
+
+        <StatCard
+          title="Revenue"
+          value={formatCurrency(data.total_revenue)}
+          description="Paid sales"
+          icon={<Banknote size={22} />}
+        />
+
+        <StatCard
+          title="Pending Sales"
+          value={formatNumber(data.pending_sales)}
+          description="Awaiting completion"
+          icon={<ClipboardList size={22} />}
+        />
+
+        <StatCard
+          title="External Deliveries"
+          value={formatNumber(data.total_external_deliveries)}
+          description="Non-cancelled external deliveries"
+          icon={<Truck size={22} />}
+        />
+      </div>
+
+      <h6 className="text-secondary fw-bold mb-3">
+        WATER USAGE AND DISTRIBUTION
+      </h6>
+
+      <div className="row g-3">
+        <div className="col-12 col-lg-6">
+          <div className="card border-0 shadow-sm h-100">
+            <div className="card-body p-4">
+              <h6 className="fw-bold mb-3">Water Processing</h6>
+
+              <div className="d-flex justify-content-between mb-3">
+                <span className="text-secondary">Water received</span>
+                <strong>
+                  {formatNumber(data.total_water_received_litres)} L
+                </strong>
               </div>
-            </Link>
-          </div>
-        ))}
-      </div>
 
-      <div className="row g-3 mb-4">
-        <div className="col-md-4">
+              <div className="d-flex justify-content-between mb-3">
+                <span className="text-secondary">Water used</span>
+                <strong>
+                  {formatNumber(data.total_water_used_litres)} L
+                </strong>
+              </div>
+
+              <div className="d-flex justify-content-between">
+                <span className="text-secondary">Processing loss</span>
+                <strong>
+                  {formatNumber(data.total_water_loss_litres)} L
+                </strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-12 col-lg-6">
           <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h6 className="text-muted">Pending Sales</h6>
-              <h3 className="fw-bold">{formatNumber(data.pending_sales)}</h3>
-              <Link to="/sales" className="small text-decoration-none">
-                View sales
-              </Link>
+            <div className="card-body p-4">
+              <h6 className="fw-bold mb-3">Distribution Overview</h6>
+
+              <div className="d-flex justify-content-between mb-3">
+                <span className="text-secondary">
+                  Internal distributions
+                </span>
+                <strong>
+                  {formatNumber(data.total_internal_distributions)}
+                </strong>
+              </div>
+
+              <div className="d-flex justify-content-between mb-3">
+                <span className="text-secondary">
+                  Internal bottles distributed
+                </span>
+                <strong>
+                  {formatNumber(data.total_internal_units_distributed)}
+                </strong>
+              </div>
+
+              <div className="d-flex justify-content-between mb-3">
+                <span className="text-secondary">
+                  Completed internal deliveries
+                </span>
+                <strong>
+                  {formatNumber(data.completed_internal_deliveries)}
+                </strong>
+              </div>
+
+              <div className="d-flex justify-content-between">
+                <span className="text-secondary">
+                  Completed external deliveries
+                </span>
+                <strong>
+                  {formatNumber(data.completed_external_deliveries)}
+                </strong>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h6 className="text-muted">Internal Distributions</h6>
-              <h3 className="fw-bold">
-                {formatNumber(data.total_internal_distributions)}
-              </h3>
-              <p className="text-muted small mb-0">
-                {formatNumber(data.total_internal_units_distributed)} units distributed
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-md-4">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h6 className="text-muted">Completed Deliveries</h6>
-              <h3 className="fw-bold">
-                {formatNumber(
-                  data.completed_internal_deliveries +
-                  data.completed_external_deliveries
-                )}
-              </h3>
-              <p className="text-muted small mb-0">
-                Internal and external deliveries
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white py-3 d-flex justify-content-between">
-          <h5 className="fw-semibold mb-0">Low Stock Alerts</h5>
-          <Link to="/inventory" className="text-decoration-none">
-            View inventory
-          </Link>
-        </div>
-
-        <div className="card-body">
-          {data.low_stock_products.length === 0 ? (
-            <p className="text-muted mb-0">
-              No low-stock products reported.
-            </p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Product</th>
-                    <th>Available Stock</th>
-                    <th>Reorder Level</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.low_stock_products.map((product) => (
-                    <tr key={product.product_id}>
-                      <td>{product.product_name}</td>
-                      <td>{formatNumber(product.quantity_available)}</td>
-                      <td>{formatNumber(product.reorder_level)}</td>
-                      <td>
-                        <span className="badge bg-danger">
-                          Low Stock
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       </div>
     </div>
