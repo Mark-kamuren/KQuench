@@ -22,6 +22,10 @@ import {
   Menu,
   X,
   Droplets,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 
 import { useAuth } from "./context/AuthContext";
@@ -160,6 +164,7 @@ function HomeRedirect() {
   );
 }
 
+
 function Login() {
   const { login, user, loading } = useAuth();
   const navigate = useNavigate();
@@ -168,6 +173,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (!loading && user) {
     return <HomeRedirect />;
@@ -183,12 +189,11 @@ function Login() {
       navigate("/", { replace: true });
     } catch (err: any) {
       const data = err?.response?.data;
-
       setError(
         data?.detail ||
-          data?.non_field_errors?.[0] ||
-          data?.username?.[0] ||
-          "Unable to sign in. Check your username and password."
+        data?.non_field_errors?.[0] ||
+        data?.username?.[0] ||
+        "Unable to sign in. Check your username and password."
       );
     } finally {
       setSubmitting(false);
@@ -196,83 +201,125 @@ function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-brand">
-          <div className="brand-icon">
+    <div className="auth-screen">
+      <section className="auth-showcase">
+        <div className="auth-brand">
+          <div className="auth-logo">
             <Droplets size={30} />
           </div>
-
-          <h1>KQuench</h1>
-          <p>Water Operations Management System</p>
+          <span>KQuench</span>
         </div>
 
-        <h2>Welcome back</h2>
+        <div className="auth-showcase-content">
+          <span className="auth-eyebrow">WATER OPERATIONS MANAGEMENT</span>
+          <h1>Managing water operations with clarity and control.</h1>
+          <p>
+            A central platform for managing water receipts,
+            bottling, inventory, sales and distribution.
+          </p>
 
-        <p className="login-subtitle">
-          Sign in to access your workspace.
-        </p>
-
-        {error && (
-          <div className="alert alert-danger" role="alert">
-            {error}
+          <div className="auth-feature">
+            <ShieldCheck size={21} />
+            <span>Secure, role-based system access</span>
           </div>
-        )}
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <label className="form-label" htmlFor="username">
-              Username
-            </label>
+        <div className="auth-showcase-footer">
+          KQuench Operations Management System
+        </div>
+      </section>
 
-            <input
-              id="username"
-              type="text"
-              className="form-control"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              autoComplete="username"
-              required
-              disabled={submitting}
-            />
+      <section className="auth-panel">
+        <div className="auth-form-container">
+          <div className="auth-mobile-brand">
+            <Droplets size={25} />
+            <strong>KQuench</strong>
           </div>
 
-          <div className="mb-4">
-            <label className="form-label" htmlFor="password">
-              Password
-            </label>
+          <span className="auth-welcome">WELCOME BACK</span>
+          <h2>Sign in to your account</h2>
+          <p className="auth-description">
+            Enter your credentials to access your workspace.
+          </p>
 
-            <input
-              id="password"
-              type="password"
-              className="form-control"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              required
-              disabled={submitting}
-            />
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="auth-field">
+              <label htmlFor="username">Username</label>
+              <input
+                id="username"
+                type="text"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoComplete="username"
+                required
+                disabled={submitting}
+              />
+            </div>
+
+            <div className="auth-field">
+              <label htmlFor="password">Password</label>
+              <div className="auth-password-wrapper">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                  disabled={submitting}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="auth-submit"
+              disabled={submitting || !username.trim() || !password}
+            >
+              {submitting ? (
+                <>
+                  <span className="spinner-border spinner-border-sm" />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight size={19} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="auth-security">
+            <ShieldCheck size={17} />
+            <span>Your account is protected by secure authentication.</span>
           </div>
+        </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary w-100 login-button"
-            disabled={submitting || !username.trim() || !password}
-          >
-            {submitting ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-2" />
-                Signing in...
-              </>
-            ) : (
-              "Sign In"
-            )}
-          </button>
-        </form>
-      </div>
+        <div className="auth-panel-footer">
+          © 2026 KQuench. All rights reserved.
+        </div>
+      </section>
     </div>
   );
 }
+
 
 function MainLayout() {
   const { user, logout } = useAuth();
