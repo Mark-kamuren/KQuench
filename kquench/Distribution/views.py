@@ -105,3 +105,11 @@ class DistributionItemViewSet(viewsets.ReadOnlyModelViewSet):
         'sale_item__product'
     )
     serializer_class = DistributionItemSerializer
+    role_permissions = {
+    'list': ['ADMIN', 'DISTRIBUTION_OFFICER'],
+    'retrieve': ['ADMIN', 'DISTRIBUTION_OFFICER'],
+    'create': ['DISTRIBUTION_OFFICER'],
+    'update': ['DISTRIBUTION_OFFICER'],
+    'partial_update': ['DISTRIBUTION_OFFICER'],
+    'destroy': ['DISTRIBUTION_OFFICER'],
+}

@@ -36,3 +36,15 @@ class SaleItemViewSet(viewsets.ReadOnlyModelViewSet):
         'product'
     )
     serializer_class = SaleItemSerializer
+
+    class SaleItemViewSet(viewsets.ReadOnlyModelViewSet):
+        queryset = SaleItem.objects.select_related(
+        'sale',
+        'product'
+    )
+    serializer_class = SaleItemSerializer
+
+    role_permissions = {
+        'list': ['SALES_OFFICER', 'DISTRIBUTION_OFFICER'],
+        'retrieve': ['SALES_OFFICER', 'DISTRIBUTION_OFFICER'],
+    }

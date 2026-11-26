@@ -155,6 +155,11 @@ class DistributionSerializer(serializers.ModelSerializer):
                     "Cannot deliver a cancelled sale."
                 )
 
+            if sale.payment_status != "PAID":
+                raise serializers.ValidationError({
+                    "sale": "Only fully paid sales can be assigned for dispatch."
+                })
+
             for item in items:
                 sale_item = item.get("sale_item")
 
