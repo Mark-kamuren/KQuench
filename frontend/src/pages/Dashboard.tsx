@@ -214,13 +214,6 @@ export default function Dashboard() {
         />
 
         <StatCard
-          title="Revenue"
-          value={formatCurrency(data.total_revenue)}
-          description="Paid sales"
-          icon={<Banknote size={22} />}
-        />
-
-        <StatCard
           title="Pending Sales"
           value={formatNumber(data.pending_sales)}
           description="Awaiting completion"

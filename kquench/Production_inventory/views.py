@@ -1,3 +1,4 @@
+
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.mixins import (
@@ -31,23 +32,22 @@ from .serializers import (
 from .services import adjust_inventory
 
 
+# Roles allowed to view operational records
+OPERATIONAL_ROLES = [
+    "PRODUCTION_MANAGER",
+    "INVENTORY_MANAGER",
+    "SALES_OFFICER",
+    "DISTRIBUTION_OFFICER",
+]
+
+
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
 
     role_permissions = {
-        "list": [
-            "PRODUCTION_MANAGER",
-            "INVENTORY_MANAGER",
-            "SALES_OFFICER",
-            "DISTRIBUTION_OFFICER",
-        ],
-        "retrieve": [
-            "PRODUCTION_MANAGER",
-            "INVENTORY_MANAGER",
-            "SALES_OFFICER",
-            "DISTRIBUTION_OFFICER",
-        ],
+        "list": OPERATIONAL_ROLES,
+        "retrieve": OPERATIONAL_ROLES,
         "create": ["INVENTORY_MANAGER"],
         "update": ["INVENTORY_MANAGER"],
         "partial_update": ["INVENTORY_MANAGER"],
@@ -118,6 +118,8 @@ class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = InventorySerializer
 
     role_permissions = {
+        "list": OPERATIONAL_ROLES,
+        "retrieve": OPERATIONAL_ROLES,
         "adjust": ["INVENTORY_MANAGER"],
     }
 
@@ -166,3 +168,8 @@ class InventoryTransactionViewSet(viewsets.ReadOnlyModelViewSet):
         "distribution_item",
     )
     serializer_class = InventoryTransactionSerializer
+
+    role_permissions = {
+        "list": OPERATIONAL_ROLES,
+        "retrieve": OPERATIONAL_ROLES,
+    }
