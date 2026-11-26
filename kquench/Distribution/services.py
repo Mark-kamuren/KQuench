@@ -238,7 +238,11 @@ def complete_distribution(distribution_id):
         raise ValidationError(
             "A cancelled sale cannot be completed."
         )
-
+   
+    if sale.payment_status != "PAID":
+        raise ValidationError(
+        "This sale must be fully paid before it can be dispatched."
+    )
     sale_items = list(sale.items.all())
 
     if not sale_items:
