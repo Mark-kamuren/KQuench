@@ -46,6 +46,7 @@ export default function Sales() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [updatingPayment, setUpdatingPayment] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -160,6 +161,31 @@ export default function Sales() {
     }
   }
 
+  async function markAsPaid(sale: Sale) {
+    const confirmed = window.confirm(
+      `Confirm that payment of ${formatCurrency(sale.total_amount)} has been received from ${sale.customer_name}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setUpdatingPayment(sale.sale_id);
+      setError("");
+      setSuccess("");
+
+      await api.patch(`sales/${sale.sale_id}/`, {
+        payment_status: "PAID",
+      });
+
+      setSuccess(`Sale #${sale.sale_id} has been marked as PAID.`);
+      await loadData();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setUpdatingPayment(null);
+    }
+  }
+
   const formatCurrency = (value: number | string) =>
     `KES ${Number(value || 0).toLocaleString("en-KE", {
       minimumFractionDigits: 2,
@@ -171,7 +197,7 @@ export default function Sales() {
       <div className="mb-4">
         <h3 className="fw-bold">Sales Management</h3>
         <p className="text-muted">
-          Manage external customers, sales orders and delivery information.
+          Manage external customers, sales orders, payments and delivery information.
         </p>
       </div>
 
@@ -303,6 +329,7 @@ export default function Sales() {
           <button
             className="btn btn-sm btn-outline-primary"
             onClick={loadData}
+            disabled={loading}
           >
             <i className="bi bi-arrow-clockwise me-1" />
             Refresh
@@ -324,6 +351,7 @@ export default function Sales() {
                     <th>Payment</th>
                     <th>Sale Status</th>
                     <th>Date</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
 
@@ -335,7 +363,15 @@ export default function Sales() {
                       <td>{sale.customer_phone}</td>
                       <td>{formatCurrency(sale.total_amount)}</td>
                       <td>
-                        <span className="badge bg-info text-dark">
+                        <span
+                          className={`badge ${
+                            sale.payment_status === "PAID"
+                              ? "bg-success"
+                              : sale.payment_status === "CANCELLED"
+                              ? "bg-danger"
+                              : "bg-warning text-dark"
+                          }`}
+                        >
                           {sale.payment_status}
                         </span>
                       </td>
@@ -357,12 +393,32 @@ export default function Sales() {
                           ? new Date(sale.sale_date).toLocaleDateString()
                           : "-"}
                       </td>
+                      <td>
+                        {sale.payment_status === "PENDING" &&
+                        sale.sale_status !== "CANCELLED" ? (
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => markAsPaid(sale)}
+                            disabled={updatingPayment === sale.sale_id}
+                          >
+                            {updatingPayment === sale.sale_id
+                              ? "Updating..."
+                              : "Mark as Paid"}
+                          </button>
+                        ) : sale.payment_status === "PAID" ? (
+                          <span className="text-success small fw-semibold">
+                            Payment received
+                          </span>
+                        ) : (
+                          <span className="text-muted small">No action</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
 
                   {sales.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center text-muted py-4">
+                      <td colSpan={8} className="text-center text-muted py-4">
                         No sales recorded yet.
                       </td>
                     </tr>
